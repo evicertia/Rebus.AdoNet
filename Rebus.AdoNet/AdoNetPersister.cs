@@ -14,12 +14,10 @@ namespace Rebus.AdoNet
 	/// <summary>
 	/// Implements a saga persister for Rebus that stores sagas using an AdoNet provider.
 	/// </summary>
-	public class AdoNetSagaPersister : AdoNetStorage, IStoreSagaData
+	public class AdoNetSagaPersister : AdoNetStorage, IStoreSagaData, AdoNetSagaPersisterFluentConfigurer
 	{
-		private static ILog log;
-
 		private const int MaximumSagaDataTypeNameLength = 40;
-
+		private static ILog log;
 		private static readonly JsonSerializerSettings Settings = new JsonSerializerSettings {
 			TypeNameHandling = TypeNameHandling.Auto, // TODO: Make it configurable..
 			DateFormatHandling = DateFormatHandling.IsoDateFormat, // TODO: Make it configurable..
@@ -27,9 +25,9 @@ namespace Rebus.AdoNet
 
 		private string sagaIndexTableName;
 		private string sagaTableName;
-
 		private string idPropertyName;
 		private bool indexNullProperties = true;
+		private Func<Type, string> sagaNameCustomizer = null;
 
 		static AdoNetSagaPersister()
 		{
@@ -76,7 +74,7 @@ namespace Rebus.AdoNet
 		/// <summary>
 		/// Configures the persister to ignore null-valued correlation properties and not add them to the saga index.
 		/// </summary>
-		public AdoNetSagaPersister DoNotIndexNullProperties()
+		public AdoNetSagaPersisterFluentConfigurer DoNotIndexNullProperties()
 		{
 			indexNullProperties = false;
 			return this;
@@ -87,7 +85,7 @@ namespace Rebus.AdoNet
 		/// with a name that matches one of the desired table names, no action is performed (i.e. it is assumed that
 		/// the tables already exist).
 		/// </summary>
-		public AdoNetSagaPersister EnsureTablesAreCreated()
+		public AdoNetSagaPersisterFluentConfigurer EnsureTablesAreCreated()
 		{
 			var connection = getConnection();
 			try
@@ -140,6 +138,17 @@ CREATE INDEX ON ""{0}"" (""saga_id"");
 			{
 				releaseConnection(connection);
 			}
+			return this;
+		}
+
+		/// <summary>
+		/// Customizes the saga names by invoking this customizer.
+		/// </summary>
+		/// <param name="customizer">The customizer.</param>
+		/// <returns></returns>
+		public AdoNetSagaPersisterFluentConfigurer CustomizeSagaNamesAs(Func<Type, string> customizer)
+		{
+			this.sagaNameCustomizer = customizer;
 			return this;
 		}
 
@@ -237,7 +246,7 @@ CREATE INDEX ON ""{0}"" (""saga_id"");
 			}
 		}
 
-		void CreateIndex(ISagaData sagaData, ConnectionHolder connection, IEnumerable<KeyValuePair<string, string>> propertiesToIndex)
+		private void CreateIndex(ISagaData sagaData, ConnectionHolder connection, IEnumerable<KeyValuePair<string, string>> propertiesToIndex)
 		{
 			var sagaTypeName = GetSagaTypeName(sagaData.GetType());
 			var parameters = propertiesToIndex
@@ -370,12 +379,11 @@ WHERE i.""saga_type"" = @saga_type AND i.""key"" = @key AND i.value = @value
 			}
 		}
 
-		void Initialize(string sagaTableName, string sagaIndexTableName)
+		private void Initialize(string sagaTableName, string sagaIndexTableName)
 		{
 			this.sagaTableName = sagaTableName;
 			this.sagaIndexTableName = sagaIndexTableName;
-
-			idPropertyName = Reflect.Path<ISagaData>(x => x.Id);
+			this.idPropertyName = Reflect.Path<ISagaData>(x => x.Id);
 		}
 
 		List<KeyValuePair<string, string>> GetPropertiesToIndex(ISagaData sagaData, IEnumerable<string> sagaDataPropertyPathsToIndex)
@@ -390,9 +398,9 @@ WHERE i.""saga_type"" = @saga_type AND i.""key"" = @key AND i.value = @value
 				.ToList();
 		}
 
-		string GetSagaTypeName(Type sagaDataType)
+		private string GetSagaTypeName(Type sagaDataType)
 		{
-			var sagaTypeName = sagaDataType.Name;
+			var sagaTypeName = sagaNameCustomizer != null ? sagaNameCustomizer(sagaDataType) : sagaDataType.Name;
 
 			if (sagaTypeName.Length > MaximumSagaDataTypeNameLength)
 			{

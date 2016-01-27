@@ -12,7 +12,7 @@ namespace Rebus.AdoNet
 	/// <summary>
 	/// Implements a subscription storage for Rebus that stores sagas in AdoNet.
 	/// </summary>
-	public class AdoNetSubscriptionStorage : AdoNetStorage, IStoreSubscriptions
+	public class AdoNetSubscriptionStorage : AdoNetStorage, IStoreSubscriptions, AdoNetSubscriptionStorageFluentConfigurer
 	{
 		static ILog log;
 
@@ -144,7 +144,7 @@ namespace Rebus.AdoNet
 		/// with a name that matches the desired table name, no action is performed (i.e. it is assumed that
 		/// the table already exists).
 		/// </summary>
-		public AdoNetSubscriptionStorage EnsureTableIsCreated()
+		public AdoNetSubscriptionStorageFluentConfigurer EnsureTableIsCreated()
 		{
 			var connection = getConnection();
 			try

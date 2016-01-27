@@ -12,7 +12,7 @@ namespace Rebus.AdoNet
 	/// <summary>
 	/// Implements a timeout storage for Rebus that stores sagas in AdoNet.
 	/// </summary>
-	public class AdoNetTimeoutStorage : AdoNetStorage, IStoreTimeouts
+	public class AdoNetTimeoutStorage : AdoNetStorage, IStoreTimeouts, AdoNetTimeoutStorageFluentConfigurer
 	{
 		static ILog log;
 
@@ -160,7 +160,7 @@ ORDER BY ""time_to_return"" ASC
 		/// with a name that matches the desired table name, no action is performed (i.e. it is assumed that
 		/// the table already exists).
 		/// </summary>
-		public AdoNetTimeoutStorage EnsureTableIsCreated()
+		public AdoNetTimeoutStorageFluentConfigurer EnsureTableIsCreated()
 		{
 			var connection = getConnection();
 			try

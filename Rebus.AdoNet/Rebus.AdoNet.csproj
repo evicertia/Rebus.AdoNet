@@ -53,9 +53,12 @@
     <Compile Include="AdoNetExceptionManager.cs" />
     <Compile Include="AdoNetExtensions.cs" />
     <Compile Include="AdoNetPersister.cs" />
+    <Compile Include="AdoNetSagaPersisterFluentConfigurer.cs" />
     <Compile Include="AdoNetStorage.cs" />
     <Compile Include="AdoNetSubscriptionStorage.cs" />
+    <Compile Include="AdoNetSubscriptionStorageFluentConfigurer.cs" />
     <Compile Include="AdoNetTimeoutStorage.cs" />
+    <Compile Include="AdoNetTimeoutStorageFluentConfigurer.cs" />
     <Compile Include="ConnectionHolder.cs" />
     <Compile Include="netfx\System\Guard.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -82,12 +85,7 @@
     <ItemGroup>
       <InputAssemblies Include="$(OutputPath)\Newtonsoft.Json.dll" />
     </ItemGroup>
-    <ILMergeTool
-        Internalize="true"
-        InputAssemblies="@(InputAssemblies)"
-        ToolPath="$(SolutionDir)packages\ILMerge.Tools.2.14.1208\tools\ILMerge.exe"
-        OutputFile="$(OutputPath)\$(AssemblyName).dll"
-        />
+    <ILMergeTool Internalize="true" InputAssemblies="@(InputAssemblies)" ToolPath="$(SolutionDir)packages\ILMerge.Tools.2.14.1208\tools\ILMerge.exe" OutputFile="$(OutputPath)\$(AssemblyName).dll" />
   </Target>
   <!-- /ILMerge -->
 </Project>

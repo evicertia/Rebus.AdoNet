@@ -1,6 +1,8 @@
-﻿using System.Data;
-using System.Data.Common;
+﻿using System;
 using System.Configuration;
+using System.Data;
+using System.Data.Common;
+using System.Linq;
 using Rebus.Configuration;
 
 namespace Rebus.AdoNet
@@ -25,7 +27,7 @@ namespace Rebus.AdoNet
 
 			configurer.Use(storage);
 
-			return new AdoNetSubscriptionStorageFluentConfigurer(storage);
+			return storage;
 		}
 
 		/// <summary>
@@ -38,7 +40,7 @@ namespace Rebus.AdoNet
 
 			configurer.Use(persister);
 
-			return new AdoNetSagaPersisterFluentConfigurer(persister);
+			return persister;
 		}
 
 		/// <summary>
@@ -51,89 +53,7 @@ namespace Rebus.AdoNet
 
 			configurer.Use(storage);
 
-			return new AdoNetTimeoutStorageFluentConfigurer(storage);
-		}
-
-		/// <summary>
-		/// Fluent configurer that allows for configuring the underlying <see cref="AdoNetSubscriptionStorageFluentConfigurer"/>
-		/// </summary>
-		public class AdoNetSubscriptionStorageFluentConfigurer
-		{
-			readonly AdoNetSubscriptionStorage AdoNetSubscriptionStorage;
-
-			public AdoNetSubscriptionStorageFluentConfigurer(AdoNetSubscriptionStorage AdoNetSubscriptionStorage)
-			{
-				this.AdoNetSubscriptionStorage = AdoNetSubscriptionStorage;
-			}
-
-			/// <summary>
-			/// Checks to see if the underlying SQL tables are created - if none of them exist,
-			/// they will automatically be created
-			/// </summary>
-			public AdoNetSubscriptionStorageFluentConfigurer EnsureTableIsCreated()
-			{
-				AdoNetSubscriptionStorage.EnsureTableIsCreated();
-
-				return this;
-			}
-		}
-
-		/// <summary>
-		/// Fluent configurer that allows for configuring the underlying <see cref="AdoNetSagaPersister"/>
-		/// </summary>
-		public class AdoNetSagaPersisterFluentConfigurer
-		{
-			readonly AdoNetSagaPersister AdoNetSagaPersister;
-
-			public AdoNetSagaPersisterFluentConfigurer(AdoNetSagaPersister AdoNetSagaPersister)
-			{
-				this.AdoNetSagaPersister = AdoNetSagaPersister;
-			}
-
-			/// <summary>
-			/// Checks to see if the underlying SQL tables are created - if none of them exist,
-			/// they will automatically be created
-			/// </summary>
-			public AdoNetSagaPersisterFluentConfigurer EnsureTablesAreCreated()
-			{
-				AdoNetSagaPersister.EnsureTablesAreCreated();
-
-				return this;
-			}
-
-			/// <summary>
-			/// Configures the persister to ignore null-valued correlation properties and not add them to the saga index.
-			/// </summary>
-			public AdoNetSagaPersisterFluentConfigurer DoNotIndexNullProperties()
-			{
-				AdoNetSagaPersister.DoNotIndexNullProperties();
-
-				return this;
-			}
-		}
-
-		/// <summary>
-		/// Fluent configurer that allows for configuring the underlying <see cref="AdoNetTimeoutStorageFluentConfigurer"/>
-		/// </summary>
-		public class AdoNetTimeoutStorageFluentConfigurer
-		{
-			readonly AdoNetTimeoutStorage AdoNetTimeoutStorage;
-
-			public AdoNetTimeoutStorageFluentConfigurer(AdoNetTimeoutStorage AdoNetTimeoutStorage)
-			{
-				this.AdoNetTimeoutStorage = AdoNetTimeoutStorage;
-			}
-
-			/// <summary>
-			/// Checks to see if the underlying SQL tables are created - if none of them exist,
-			/// they will automatically be created
-			/// </summary>
-			public AdoNetTimeoutStorageFluentConfigurer EnsureTableIsCreated()
-			{
-				AdoNetTimeoutStorage.EnsureTableIsCreated();
-
-				return this;
-			}
+			return storage;
 		}
 	}
 }
