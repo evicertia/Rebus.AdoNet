@@ -20,7 +20,10 @@ namespace Rebus.AdoNet
 
 		private const int MaximumSagaDataTypeNameLength = 40;
 
-		private static readonly JsonSerializerSettings Settings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.All };
+		private static readonly JsonSerializerSettings Settings = new JsonSerializerSettings {
+			TypeNameHandling = TypeNameHandling.Auto, // TODO: Make it configurable..
+			DateFormatHandling = DateFormatHandling.IsoDateFormat, // TODO: Make it configurable..
+		};
 
 		private string sagaIndexTableName;
 		private string sagaTableName;
@@ -372,7 +375,7 @@ WHERE i.""saga_type"" = @saga_type AND i.""key"" = @key AND i.value = @value
 			this.sagaTableName = sagaTableName;
 			this.sagaIndexTableName = sagaIndexTableName;
 
-			idPropertyName = Reflect<ISagaData>.GetPropertyName(x => x.Id);
+			idPropertyName = Reflect.Path<ISagaData>(x => x.Id);
 		}
 
 		List<KeyValuePair<string, string>> GetPropertiesToIndex(ISagaData sagaData, IEnumerable<string> sagaDataPropertyPathsToIndex)
