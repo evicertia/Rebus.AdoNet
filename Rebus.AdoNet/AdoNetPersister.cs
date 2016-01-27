@@ -22,7 +22,7 @@ namespace Rebus.AdoNet
 		private const int MaximumSagaDataTypeNameLength = 40;
 		private static ILog log;
 		private static readonly JsonSerializerSettings Settings = new JsonSerializerSettings {
-			TypeNameHandling = TypeNameHandling.Auto, // TODO: Make it configurable..
+			TypeNameHandling = TypeNameHandling.All, // TODO: Make it configurable by adding a SagaTypeResolver feature.
 			DateFormatHandling = DateFormatHandling.IsoDateFormat, // TODO: Make it configurable..
 		};
 
