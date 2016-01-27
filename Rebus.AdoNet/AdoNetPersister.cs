@@ -11,6 +11,9 @@ using Rebus.Serialization;
 
 namespace Rebus.AdoNet
 {
+	// TODO: Maybe we can use something to dynamically adapt queries
+	//		 for each SQL dialec. Like: https://github.com/candoumbe/Queries
+
 	/// <summary>
 	/// Implements a saga persister for Rebus that stores sagas using an AdoNet provider.
 	/// </summary>
@@ -172,12 +175,9 @@ CREATE INDEX ON ""{0}"" (""saga_id"");
 					{
 						command.ExecuteNonQuery();
 					}
-					catch (Exception exception)
+					catch (DbException exception)
 					{
-						if (AdoNetExceptionManager.IsOptimistickLockingException(exception))
-							throw new OptimisticLockingException(sagaData, exception);
-						
-						throw;
+						throw new OptimisticLockingException(sagaData, exception);
 					}
 				}
 

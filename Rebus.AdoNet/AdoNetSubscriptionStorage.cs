@@ -63,7 +63,7 @@ namespace Rebus.AdoNet
 					}
 					catch (DbException ex)
 					{
-						if (!AdoNetExceptionManager.IsOptimistickLockingException(ex))
+						if (!AdoNetExceptionManager.IsDuplicatedKeyException(ex))
 							throw;
 					}
 				}
