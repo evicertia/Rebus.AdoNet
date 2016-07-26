@@ -1,4 +1,7 @@
 ﻿using System;
+using System.IO;
+
+using Common.Logging;
 using NUnit.Framework;
 
 using Ponder;
@@ -22,11 +25,11 @@ namespace Rebus.AdoNet
 		}
 		#endregion
 
-		private const string DBFILE = @"c:\temp\radonet.db";
+		private static readonly ILog _Log = LogManager.GetLogger<SagaPersisterTests>();
 		private const string PROVIDER_NAME = "csharp-sqlite";
-		private const string CONNECTION_STRING = @"Data Source={0};Version=3;New=True;";
+		private const string CONNECTION_STRING = @"Data Source=file://{0};Version=3;New=True;";
 
-		private AdoNetSagaPersister persister;
+		private AdoNetSagaPersister _persister;
 
 		public SagaPersisterTests()
 			: base(GetConnectionString(), PROVIDER_NAME)
@@ -35,19 +38,22 @@ namespace Rebus.AdoNet
 
 		private static string GetConnectionString()
 		{
-			return string.Format(CONNECTION_STRING, DBFILE);
+			var dbfile = AssemblyFixture.TrackDisposable(new TempFile());
+			File.Delete(dbfile.Path);
+			_Log.DebugFormat("Using temporal file: {0}", dbfile.Path);
+			return string.Format(CONNECTION_STRING, dbfile.Path);
 		}
 
-		protected override void DoSetUp()
+		protected override void OnSetUp()
 		{
 			DropSagaTables();
-			persister = new AdoNetSagaPersister(ConnectionString, ProviderName, SagaIndexTableName, SagaTableName);
+			_persister = new AdoNetSagaPersister(ConnectionString, ProviderName, SagaIndexTableName, SagaTableName);
 		}
 
 		[Test]
 		public void WhenIgnoringNullProperties_DoesNotSaveNullPropertiesOnUpdate()
 		{
-			persister.EnsureTablesAreCreated()
+			_persister.EnsureTablesAreCreated()
 				.DoNotIndexNullProperties();
 
 			const string correlationProperty1 = "correlation property 1";
@@ -61,22 +67,22 @@ namespace Rebus.AdoNet
 			var firstPieceOfSagaDataWithNullValueOnProperty = new PieceOfSagaData { SomeProperty = correlationProperty1, AnotherProperty = "random12423" };
 			var nextPieceOfSagaDataWithNullValueOnProperty = new PieceOfSagaData { SomeProperty = correlationProperty2, AnotherProperty = "random38791387" };
 
-			persister.Insert(firstPieceOfSagaDataWithNullValueOnProperty, correlationPropertyPaths);
-			persister.Insert(nextPieceOfSagaDataWithNullValueOnProperty, correlationPropertyPaths);
+			_persister.Insert(firstPieceOfSagaDataWithNullValueOnProperty, correlationPropertyPaths);
+			_persister.Insert(nextPieceOfSagaDataWithNullValueOnProperty, correlationPropertyPaths);
 
-			var firstPiece = persister.Find<PieceOfSagaData>(Reflect.Path<PieceOfSagaData>(s => s.SomeProperty), correlationProperty1);
+			var firstPiece = _persister.Find<PieceOfSagaData>(Reflect.Path<PieceOfSagaData>(s => s.SomeProperty), correlationProperty1);
 			firstPiece.AnotherProperty = null;
-			persister.Update(firstPiece, correlationPropertyPaths);
+			_persister.Update(firstPiece, correlationPropertyPaths);
 
-			var nextPiece = persister.Find<PieceOfSagaData>(Reflect.Path<PieceOfSagaData>(s => s.SomeProperty), correlationProperty2);
+			var nextPiece = _persister.Find<PieceOfSagaData>(Reflect.Path<PieceOfSagaData>(s => s.SomeProperty), correlationProperty2);
 			nextPiece.AnotherProperty = null;
-			persister.Update(nextPiece, correlationPropertyPaths);
+			_persister.Update(nextPiece, correlationPropertyPaths);
 		}
 
 		[Test]
 		public void WhenIgnoringNullProperties_DoesNotSaveNullPropertiesOnInsert()
 		{
-			persister.EnsureTablesAreCreated()
+			_persister.EnsureTablesAreCreated()
 				.DoNotIndexNullProperties();
 
 			const string correlationProperty1 = "correlation property 1";
@@ -100,13 +106,13 @@ namespace Rebus.AdoNet
 			var firstId = firstPieceOfSagaDataWithNullValueOnProperty.Id;
 			var nextId = nextPieceOfSagaDataWithNullValueOnProperty.Id;
 
-			persister.Insert(firstPieceOfSagaDataWithNullValueOnProperty, correlationPropertyPaths);
+			_persister.Insert(firstPieceOfSagaDataWithNullValueOnProperty, correlationPropertyPaths);
 
 			// must not throw:
-			persister.Insert(nextPieceOfSagaDataWithNullValueOnProperty, correlationPropertyPaths);
+			_persister.Insert(nextPieceOfSagaDataWithNullValueOnProperty, correlationPropertyPaths);
 
-			var firstPiece = persister.Find<PieceOfSagaData>(Reflect.Path<PieceOfSagaData>(s => s.SomeProperty), correlationProperty1);
-			var nextPiece = persister.Find<PieceOfSagaData>(Reflect.Path<PieceOfSagaData>(s => s.SomeProperty), correlationProperty2);
+			var firstPiece = _persister.Find<PieceOfSagaData>(Reflect.Path<PieceOfSagaData>(s => s.SomeProperty), correlationProperty1);
+			var nextPiece = _persister.Find<PieceOfSagaData>(Reflect.Path<PieceOfSagaData>(s => s.SomeProperty), correlationProperty2);
 
 			Assert.That(firstPiece.Id, Is.EqualTo(firstId));
 			Assert.That(nextPiece.Id, Is.EqualTo(nextId));
@@ -118,7 +124,7 @@ namespace Rebus.AdoNet
 			// arrange
 
 			// act
-			persister.EnsureTablesAreCreated();
+			_persister.EnsureTablesAreCreated();
 
 			// assert
 			var existingTables = GetTableNames();
@@ -135,9 +141,9 @@ namespace Rebus.AdoNet
 
 			// act
 			// assert
-			persister.EnsureTablesAreCreated();
-			persister.EnsureTablesAreCreated();
-			persister.EnsureTablesAreCreated();
+			_persister.EnsureTablesAreCreated();
+			_persister.EnsureTablesAreCreated();
+			_persister.EnsureTablesAreCreated();
 		}
 	}
 }

@@ -48,8 +48,9 @@ namespace Rebus.AdoNet.Dialects
 			{
 				GetDatabaseVersion(connection);
 			}
-			catch
+			catch (Exception ex)
 			{
+				Console.WriteLine("Failed: {0}", ex);
 				return false;
 			}
 

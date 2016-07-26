@@ -94,6 +94,7 @@
     <Compile Include="AssemblyFixture.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="DatabaseFixtureBase.cs" />
+    <Compile Include="TempFile.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="App.config">

@@ -89,33 +89,6 @@ namespace Rebus.AdoNet
 			ExecuteCommand(string.Format(@"DELETE FROM ""{0}""", tableName));
 		}
 
-		public string GetEndpointFor(Type messageType)
-		{
-			return null;
-		}
-
-		[SetUp]
-		public void SetUp()
-		{
-			//TimeMachine.Reset();
-			DoSetUp();
-		}
-
-		[TearDown]
-		public void TearDown()
-		{
-			DoTearDown();
-			CleanUpTrackedDisposables();
-		}
-
-		protected virtual void DoSetUp()
-		{
-		}
-
-		protected virtual void DoTearDown()
-		{
-		}
-
 		protected void DropSagaTables()
 		{
 			try
@@ -133,6 +106,32 @@ namespace Rebus.AdoNet
 			catch
 			{
 			}
+		}
+
+		protected virtual void OnSetUp()
+		{
+		}
+
+		protected virtual void DoTearDown()
+		{
+		}
+
+		[SetUp]
+		public void SetUp()
+		{
+			//TimeMachine.Reset();
+			OnSetUp();
+		}
+
+		[TearDown]
+		public void TearDown()
+		{
+			DoTearDown();
+		}
+
+		public string GetEndpointFor(Type messageType)
+		{
+			return null;
 		}
 
 #if false
@@ -154,16 +153,5 @@ namespace Rebus.AdoNet
 			return bus;
 		}
 #endif
-
-		protected T TrackDisposable<T>(T disposable) where T : IDisposable
-		{
-			DisposableTracker.TrackDisposable(disposable);
-			return disposable;
-		}
-
-		protected void CleanUpTrackedDisposables()
-		{
-			DisposableTracker.DisposeTheDisposables();
-		}
 	}
 }

@@ -361,7 +361,7 @@ namespace Rebus.AdoNet.Dialects
 
 #endregion
 
-#region Create Table
+		#region Create Table
 
 		public virtual string FormatCreateTable(AdoNetTable table)
 		{
@@ -404,9 +404,10 @@ namespace Rebus.AdoNet.Dialects
 			return sb.ToString();
 		}
 
-#endregion
+		#endregion
 
-#region SqlDialects Registry
+		#region SqlDialects Registry
+
 		private static readonly IList<SqlDialect> _dialects =
 			typeof(SqlDialect).Assembly.GetTypes()
 			.Where(x => x.IsClass && !x.IsAbstract)
@@ -435,6 +436,6 @@ namespace Rebus.AdoNet.Dialects
 			return GetAllDialects().FirstOrDefault(x => x.SupportsThisDialect(connection));
 		}
 
-#endregion
+		#endregion
 	}
 }

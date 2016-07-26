@@ -1,0 +1,74 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<test-run id="2" testcasecount="4" result="Failed" total="4" passed="0" failed="4" inconclusive="0" skipped="0" asserts="0" engine-version="3.4.1.0" clr-version="4.0.30319.17020" start-time="2016-07-26 22:15:30Z" end-time="2016-07-26 22:15:31Z" duration="0.947591">
+  <command-line><![CDATA[/Users/pruiz/Develop/evi/Rebus.AdoNet/packages/NUnit.ConsoleRunner.3.4.1/tools/nunit3-console.exe Rebus.AdoNet.Tests/bin/Release/Rebus.AdoNet.Tests.dll]]></command-line>
+  <test-suite type="Assembly" id="0-1006" name="Rebus.AdoNet.Tests.dll" fullname="/Users/pruiz/Develop/evi/Rebus.AdoNet/Rebus.AdoNet.Tests/bin/Release/Rebus.AdoNet.Tests.dll" runstate="Runnable" testcasecount="4" result="Failed" site="Child" start-time="2016-07-26 22:15:30Z" end-time="2016-07-26 22:15:31Z" duration="0.894972" total="4" passed="0" failed="4" inconclusive="0" skipped="0" asserts="0">
+    <environment framework-version="3.4.1.0" clr-version="4.0.30319.17020" os-version="Unix 15.5.0.0" platform="Unix" cwd="/Users/pruiz/Develop/evi/Rebus.AdoNet" machine-name="BayMax" user="pruiz" user-domain="BayMax" culture="es-ES" uiculture="es-ES" os-architecture="x86" />
+    <settings>
+      <setting name="WorkDirectory" value="/Users/pruiz/Develop/evi/Rebus.AdoNet" />
+      <setting name="ImageRuntimeVersion" value="4.0.30319" />
+      <setting name="ImageTargetFrameworkName" value=".NETFramework,Version=v4.5" />
+      <setting name="ImageRequiresX86" value="False" />
+      <setting name="ImageRequiresDefaultAppDomainAssemblyResolver" value="False" />
+      <setting name="NumberOfTestWorkers" value="4" />
+    </settings>
+    <properties>
+      <property name="_PID" value="432" />
+      <property name="_APPDOMAIN" value="test-domain-" />
+    </properties>
+    <failure>
+      <message><![CDATA[One or more child tests had errors]]></message>
+    </failure>
+    <test-suite type="TestSuite" id="0-1007" name="Rebus" fullname="Rebus" runstate="Runnable" testcasecount="4" result="Failed" site="Child" start-time="2016-07-26 22:15:30Z" end-time="2016-07-26 22:15:31Z" duration="0.885468" total="4" passed="0" failed="4" inconclusive="0" skipped="0" asserts="0">
+      <failure>
+        <message><![CDATA[One or more child tests had errors]]></message>
+      </failure>
+      <test-suite type="SetUpFixture" id="0-1005" name="AdoNet" fullname="Rebus.AdoNet.AssemblyFixture" classname="Rebus.AdoNet.AssemblyFixture" runstate="Runnable" testcasecount="4" result="Failed" site="Child" start-time="2016-07-26 22:15:30Z" end-time="2016-07-26 22:15:31Z" duration="0.881881" total="4" passed="0" failed="4" inconclusive="0" skipped="0" asserts="0">
+        <failure>
+          <message><![CDATA[One or more child tests had errors]]></message>
+        </failure>
+        <output><![CDATA[27/07/2016 0:15:30 [INFO]  Rebus.AdoNet.AssemblyFixture - Using csharp-sqlite provider version: Community.CsharpSqlite.SQLiteClient.SqliteClientFactory, Community.CsharpSqlite.SQLiteClient, Version=3.7.7.1, Culture=neutral, PublicKeyToken=1ce56be3f3a785b7
+]]></output>
+        <test-suite type="TestFixture" id="0-1000" name="SagaPersisterTests" fullname="Rebus.AdoNet.SagaPersisterTests" classname="Rebus.AdoNet.SagaPersisterTests" runstate="Runnable" testcasecount="4" result="Failed" label="Error" site="SetUp" start-time="2016-07-26 22:15:30Z" end-time="2016-07-26 22:15:31Z" duration="0.789215" total="4" passed="0" failed="4" inconclusive="0" skipped="0" asserts="0">
+          <failure>
+            <message><![CDATA[System.InvalidOperationException : No valid dialect detected for: csharp-sqlite]]></message>
+            <stack-trace><![CDATA[  at Rebus.AdoNet.DatabaseFixtureBase..ctor (System.String connectionString, System.String providerName) <0x35d1d08 + 0x000f7> in <filename unknown>:0 
+  at Rebus.AdoNet.SagaPersisterTests..ctor () <0x35d10c0 + 0x00023> in <filename unknown>:0 
+  at (wrapper managed-to-native) System.Reflection.MonoCMethod:InternalInvoke (System.Reflection.MonoCMethod,object,object[],System.Exception&)
+  at System.Reflection.MonoCMethod.InternalInvoke (System.Object obj, System.Object[] parameters) <0x2ee3268 + 0x00033> in <filename unknown>:0 ]]></stack-trace>
+          </failure>
+          <output><![CDATA[27/07/2016 0:15:30 [DEBUG] Rebus.AdoNet.SagaPersisterTests - Using temporal file: /var/folders/r8/7k4wr92n7m9_nfh8d_ttl4v00000gn/T/tmp68192f4.tmp
+Failed: Community.CsharpSqlite.SQLiteClient.SqliteSyntaxException: unable to open database file
+  at Community.CsharpSqlite.SQLiteClient.SqliteCommand.GetNextStatement (System.String pzStart, System.String& pzTail, Community.CsharpSqlite.Vdbe& pStmt) <0x36e14e0 + 0x000cb> in <filename unknown>:0 
+  at Community.CsharpSqlite.SQLiteClient.SqliteCommand.ExecuteReader (CommandBehavior behavior, Boolean want_results, System.Int32& rows_affected) <0x36e11a8 + 0x00097> in <filename unknown>:0 
+  at Community.CsharpSqlite.SQLiteClient.SqliteCommand.ExecuteReader (CommandBehavior behavior) <0x36e1168 + 0x0002f> in <filename unknown>:0 
+  at Community.CsharpSqlite.SQLiteClient.SqliteCommand.ExecuteReader () <0x36e1138 + 0x0001b> in <filename unknown>:0 
+  at Community.CsharpSqlite.SQLiteClient.SqliteCommand.ExecuteScalar () <0x36e10c8 + 0x00013> in <filename unknown>:0 
+  at Rebus.AdoNet.IDbExtensions.ExecuteScalar (IDbConnection connection, System.String commandText) <0x36e0ea0 + 0x00046> in <filename unknown>:0 
+  at Rebus.AdoNet.Dialects.SqliteDialect.GetDatabaseVersion (IDbConnection connection) <0x36e2388 + 0x0001b> in <filename unknown>:0 
+  at Rebus.AdoNet.Dialects.SqliteDialect.SupportsThisDialect (IDbConnection connection) <0x36e2300 + 0x00022> in <filename unknown>:0 
+]]></output>
+          <test-case id="0-1003" name="CanCreateSagaTablesAutomatically" fullname="Rebus.AdoNet.SagaPersisterTests.CanCreateSagaTablesAutomatically" methodname="CanCreateSagaTablesAutomatically" classname="Rebus.AdoNet.SagaPersisterTests" runstate="Runnable" seed="1979473546" result="Failed" label="Error" site="Parent" start-time="0001-01-01 00:00:00Z" end-time="0001-01-01 00:00:00Z" duration="0.000000" asserts="0">
+            <failure>
+              <message><![CDATA[OneTimeSetUp: System.InvalidOperationException : No valid dialect detected for: csharp-sqlite]]></message>
+            </failure>
+          </test-case>
+          <test-case id="0-1004" name="DoesntDoAnythingIfTheTablesAreAlreadyThere" fullname="Rebus.AdoNet.SagaPersisterTests.DoesntDoAnythingIfTheTablesAreAlreadyThere" methodname="DoesntDoAnythingIfTheTablesAreAlreadyThere" classname="Rebus.AdoNet.SagaPersisterTests" runstate="Runnable" seed="686097436" result="Failed" label="Error" site="Parent" start-time="0001-01-01 00:00:00Z" end-time="0001-01-01 00:00:00Z" duration="0.000000" asserts="0">
+            <failure>
+              <message><![CDATA[OneTimeSetUp: System.InvalidOperationException : No valid dialect detected for: csharp-sqlite]]></message>
+            </failure>
+          </test-case>
+          <test-case id="0-1002" name="WhenIgnoringNullProperties_DoesNotSaveNullPropertiesOnInsert" fullname="Rebus.AdoNet.SagaPersisterTests.WhenIgnoringNullProperties_DoesNotSaveNullPropertiesOnInsert" methodname="WhenIgnoringNullProperties_DoesNotSaveNullPropertiesOnInsert" classname="Rebus.AdoNet.SagaPersisterTests" runstate="Runnable" seed="1250694774" result="Failed" label="Error" site="Parent" start-time="0001-01-01 00:00:00Z" end-time="0001-01-01 00:00:00Z" duration="0.000000" asserts="0">
+            <failure>
+              <message><![CDATA[OneTimeSetUp: System.InvalidOperationException : No valid dialect detected for: csharp-sqlite]]></message>
+            </failure>
+          </test-case>
+          <test-case id="0-1001" name="WhenIgnoringNullProperties_DoesNotSaveNullPropertiesOnUpdate" fullname="Rebus.AdoNet.SagaPersisterTests.WhenIgnoringNullProperties_DoesNotSaveNullPropertiesOnUpdate" methodname="WhenIgnoringNullProperties_DoesNotSaveNullPropertiesOnUpdate" classname="Rebus.AdoNet.SagaPersisterTests" runstate="Runnable" seed="428088339" result="Failed" label="Error" site="Parent" start-time="0001-01-01 00:00:00Z" end-time="0001-01-01 00:00:00Z" duration="0.000000" asserts="0">
+            <failure>
+              <message><![CDATA[OneTimeSetUp: System.InvalidOperationException : No valid dialect detected for: csharp-sqlite]]></message>
+            </failure>
+          </test-case>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
