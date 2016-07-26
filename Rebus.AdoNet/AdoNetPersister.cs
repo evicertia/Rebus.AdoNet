@@ -226,31 +226,40 @@ namespace Rebus.AdoNet
 		public void Update(ISagaData sagaData, string[] sagaDataPropertyPathsToIndex)
 		{
 			var connection = getConnection();
+			var dialect = connection.Dialect;
+
 			try
 			{
 				// first, delete existing index
 				using (var command = connection.CreateCommand())
 				{
-					const string deleteSagaIndexSql = @"DELETE FROM ""{0}"" WHERE ""saga_id"" = @id;";
-
-					command.CommandText = string.Format(deleteSagaIndexSql, sagaIndexTableName);
-					command.AddParameter("id", sagaData.Id);
+					command.CommandText = string.Format(
+						@"DELETE FROM {0} WHERE {1} = {2};",
+						dialect.QuoteForTableName(sagaIndexTableName),
+						dialect.QuoteForColumnName(SAGA_ID_COLUMN),
+						dialect.EscapeParameter(SAGA_ID_COLUMN)
+					);
+					command.AddParameter(dialect.EscapeParameter(SAGA_ID_COLUMN), sagaData.Id);
 					command.ExecuteNonQuery();
 				}
 
 				// next, update or insert the saga
 				using (var command = connection.CreateCommand())
 				{
-					command.AddParameter("id", sagaData.Id);
-					command.AddParameter("current_revision", sagaData.Revision);
+					command.AddParameter(dialect.EscapeParameter(SAGA_ID_COLUMN), sagaData.Id);
+					command.AddParameter(dialect.EscapeParameter("current_revision"), sagaData.Revision);
+					command.AddParameter(dialect.EscapeParameter("next_revision"), ++sagaData.Revision);
+					command.AddParameter(dialect.EscapeParameter(SAGA_DATA_COLUMN), JsonConvert.SerializeObject(sagaData, Formatting.Indented, Settings));
 
-					sagaData.Revision++;
-					command.AddParameter("next_revision", sagaData.Revision);
-					command.AddParameter("data", JsonConvert.SerializeObject(sagaData, Formatting.Indented, Settings));
-
-					const string updateSagaSql = @"UPDATE ""{0}"" SET ""data"" = @data, ""revision"" = @next_revision WHERE ""id"" = @id AND ""revision"" = @current_revision";
-
-					command.CommandText = string.Format(updateSagaSql, sagaTableName);
+					command.CommandText = string.Format(
+						@"UPDATE {0} SET {1} = {2}, {3} = {4} " +
+						@"WHERE {5} = {6} AND {7} = {8};", 
+						dialect.QuoteForTableName(sagaTableName),
+						dialect.QuoteForColumnName(SAGA_DATA_COLUMN), dialect.EscapeParameter(SAGA_DATA_COLUMN),
+						dialect.QuoteForColumnName(SAGA_REVISION_COLUMN), dialect.EscapeParameter("next_revision"),
+						dialect.QuoteForColumnName(SAGA_ID_COLUMN), dialect.EscapeParameter(SAGA_ID_COLUMN),
+						dialect.QuoteForColumnName(SAGA_REVISION_COLUMN), dialect.EscapeParameter("current_revision")
+					);
 					var rows = command.ExecuteNonQuery();
 					if (rows == 0)
 					{
@@ -325,15 +334,20 @@ namespace Rebus.AdoNet
 		public void Delete(ISagaData sagaData)
 		{
 			var connection = getConnection();
+			var dialect = connection.Dialect;
+
 			try
 			{
 				using (var command = connection.CreateCommand())
 				{
-					const string updateSagaSql = @"DELETE FROM ""{0}"" WHERE ""id"" = @id AND ""revision"" = @current_revision;";
-
-					command.CommandText = string.Format(updateSagaSql, sagaTableName);
-					command.AddParameter("id", sagaData.Id);
-					command.AddParameter("current_revision", sagaData.Revision);
+					command.CommandText = string.Format(
+						@"DELETE FROM {0} WHERE {1} = {2} AND {3} = {4};",
+						dialect.QuoteForTableName(sagaTableName),
+						dialect.QuoteForColumnName(SAGA_ID_COLUMN), dialect.EscapeParameter(SAGA_ID_COLUMN),
+						dialect.QuoteForColumnName(SAGA_REVISION_COLUMN), dialect.EscapeParameter("current_revision")
+					);
+					command.AddParameter(dialect.EscapeParameter(SAGA_ID_COLUMN), sagaData.Id);
+					command.AddParameter(dialect.EscapeParameter("current_revision"), sagaData.Revision);
 
 					var rows = command.ExecuteNonQuery();
 
@@ -345,10 +359,12 @@ namespace Rebus.AdoNet
 
 				using (var command = connection.CreateCommand())
 				{
-					const string deleteSagaIndexSql = @"DELETE FROM ""{0}"" WHERE ""saga_id"" = @id";
-
-					command.CommandText = string.Format(deleteSagaIndexSql, sagaIndexTableName);
-					command.AddParameter("id", sagaData.Id);
+					command.CommandText = string.Format(
+						@"DELETE FROM {0} WHERE {1} = {2};", 
+						dialect.QuoteForTableName(sagaIndexTableName),
+						dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN), dialect.EscapeParameter(SAGA_ID_COLUMN)
+					);
+					command.AddParameter(dialect.EscapeParameter(SAGA_ID_COLUMN), sagaData.Id);
 					command.ExecuteNonQuery();
 				}
 
