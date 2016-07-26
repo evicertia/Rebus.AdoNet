@@ -54,16 +54,23 @@
     <Compile Include="AdoNetExtensions.cs" />
     <Compile Include="AdoNetPersister.cs" />
     <Compile Include="AdoNetSagaPersisterFluentConfigurer.cs" />
+    <Compile Include="Dialects\PostgreSqlDialect.cs" />
+    <Compile Include="Dialects\SqliteDialect.cs" />
+    <Compile Include="Dialects\TypeNames.cs" />
+    <Compile Include="netfx\System\Guard.cs" />
+    <Compile Include="Schema\AdoNetColumn.cs" />
+    <Compile Include="Schema\AdoNetIndex.cs" />
+    <Compile Include="Schema\AdoNetTable.cs" />
     <Compile Include="AdoNetStorage.cs" />
     <Compile Include="AdoNetSubscriptionStorage.cs" />
     <Compile Include="AdoNetSubscriptionStorageFluentConfigurer.cs" />
     <Compile Include="AdoNetTimeoutStorage.cs" />
     <Compile Include="AdoNetTimeoutStorageFluentConfigurer.cs" />
     <Compile Include="ConnectionHolder.cs" />
-    <Compile Include="netfx\System\Guard.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Reflect.cs" />
-    <Compile Include="IDbCommandExtensions.cs" />
+    <Compile Include="IDbExtensions.cs" />
+    <Compile Include="Dialects\SqlDialect.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -83,14 +90,9 @@
   <UsingTask AssemblyFile="$(SolutionDir)packages\ILMerge.Tools.MSBuildToolTask.2.14.1208.49\tools\ILMerge.Tools.MSBuildToolTask.dll" TaskName="ILMerge.Tools.MSBuildToolTask.ILMergeTool" />
   <Target Name="AfterBuild" Condition="'$(Configuration)' == 'Release'">
     <ItemGroup>
-        <InputAssemblies Include="$(OutputPath)\Newtonsoft.Json.dll" />
+      <InputAssemblies Include="$(OutputPath)\Newtonsoft.Json.dll" />
     </ItemGroup>
-    <ILMergeTool 
-	    Internalize="true"
-	    SearchDirectories="$(MSBuildProjectDirectory)\$(OutputPath.TrimEnd('\'))"
-	    InputAssemblies="@(IntermediateAssembly);@(InputAssemblies)" 
-	    ToolPath="$(SolutionDir)packages\ILMerge.Tools.2.14.1208\tools\ILMerge.exe" 
-	    OutputFile="$(OutputPath)\$(AssemblyName).dll" />
+    <ILMergeTool Internalize="true" SearchDirectories="$(MSBuildProjectDirectory)\$(OutputPath.TrimEnd('\'))" InputAssemblies="@(IntermediateAssembly);@(InputAssemblies)" ToolPath="$(SolutionDir)packages\ILMerge.Tools.2.14.1208\tools\ILMerge.exe" OutputFile="$(OutputPath)\$(AssemblyName).dll" />
   </Target>
   <!-- /ILMerge -->
 </Project>

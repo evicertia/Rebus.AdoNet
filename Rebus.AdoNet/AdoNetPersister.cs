@@ -8,6 +8,7 @@ using Newtonsoft.Json;
 
 using Rebus.Logging;
 using Rebus.Serialization;
+using Rebus.AdoNet.Schema;
 
 namespace Rebus.AdoNet
 {
@@ -20,6 +21,13 @@ namespace Rebus.AdoNet
 	public class AdoNetSagaPersister : AdoNetStorage, IStoreSagaData, AdoNetSagaPersisterFluentConfigurer
 	{
 		private const int MaximumSagaDataTypeNameLength = 40;
+		private const string SAGA_ID_COLUMN = "id";
+		private const string SAGA_DATA_COLUMN = "data";
+		private const string SAGA_REVISION_COLUMN = "revision";
+		private const string SAGAINDEX_TYPE_COLUMN = "saga_type";
+		private const string SAGAINDEX_KEY_COLUMN = "key";
+		private const string SAGAINDEX_VALUE_COLUMN = "value";
+		private const string SAGAINDEX_ID_COLUMN = "saga_id";
 		private static ILog log;
 		private static readonly JsonSerializerSettings Settings = new JsonSerializerSettings {
 			TypeNameHandling = TypeNameHandling.All, // TODO: Make it configurable by adding a SagaTypeResolver feature.
@@ -107,31 +115,42 @@ namespace Rebus.AdoNet
 
 				using (var command = connection.CreateCommand())
 				{
-					command.CommandText = string.Format(@"
-CREATE TABLE ""{0}"" (
-	""id"" UUID NOT NULL,
-	""revision"" INTEGER NOT NULL,
-	""data"" TEXT NOT NULL,
-	PRIMARY KEY (""id"")
-);
-", SagaTableName);
+					command.CommandText = connection.Dialect.FormatCreateTable(
+						new AdoNetTable()
+						{
+							Name = SagaTableName,
+							Columns = new []
+							{
+								new AdoNetColumn() { Name = SAGA_ID_COLUMN, DbType = DbType.Guid },
+								new AdoNetColumn() { Name = SAGA_REVISION_COLUMN, DbType = DbType.Int32 },
+								new AdoNetColumn() { Name = SAGA_DATA_COLUMN, DbType = DbType.String }
+							},
+							PrimaryKey = new[] { SAGA_ID_COLUMN }
+						}
+					);
 					command.ExecuteNonQuery();
 				}
 
 				using (var command = connection.CreateCommand())
 				{
-					command.CommandText = string.Format(@"
-CREATE TABLE ""{0}"" (
-	""saga_type"" VARCHAR(40) NOT NULL,
-	""key"" VARCHAR(200) NOT NULL,
-	""value"" VARCHAR(200) NOT NULL,
-	""saga_id"" UUID NOT NULL,
-	PRIMARY KEY (""key"", ""value"", ""saga_type"")
-);
-
-CREATE INDEX ON ""{0}"" (""saga_id"");
-
-", SagaIndexTableName);
+					command.CommandText = connection.Dialect.FormatCreateTable(
+						new AdoNetTable()
+						{
+							Name = SagaIndexTableName,
+							Columns = new []
+							{
+								new AdoNetColumn() { Name = SAGAINDEX_TYPE_COLUMN, DbType = DbType.StringFixedLength, Length = 40 },
+								new AdoNetColumn() { Name = SAGAINDEX_KEY_COLUMN, DbType = DbType.StringFixedLength, Length = 200  },
+								new AdoNetColumn() { Name = SAGAINDEX_VALUE_COLUMN, DbType = DbType.StringFixedLength, Length = 200 },
+								new AdoNetColumn() { Name = SAGAINDEX_ID_COLUMN, DbType = DbType.Guid }
+							},
+							PrimaryKey = new[] { SAGAINDEX_KEY_COLUMN, SAGAINDEX_VALUE_COLUMN, SAGAINDEX_TYPE_COLUMN },
+							Indexes = new []
+							{
+								new AdoNetIndex() { Name = "ix_saga_id", Columns = new[] { SAGAINDEX_ID_COLUMN } }
+							}
+						}
+					);
 					command.ExecuteNonQuery();
 				}
 
@@ -158,18 +177,26 @@ CREATE INDEX ON ""{0}"" (""saga_id"");
 		public void Insert(ISagaData sagaData, string[] sagaDataPropertyPathsToIndex)
 		{
 			var connection = getConnection();
+			var dialect = connection.Dialect;
 			try
 			{
 				// next insert the saga
 				using (var command = connection.CreateCommand())
 				{
-					command.AddParameter("id", sagaData.Id);
+					command.AddParameter(dialect.EscapeParameter(SAGA_ID_COLUMN), sagaData.Id);
+					command.AddParameter(dialect.EscapeParameter(SAGA_REVISION_COLUMN), ++sagaData.Revision);
+					command.AddParameter(dialect.EscapeParameter(SAGA_DATA_COLUMN), JsonConvert.SerializeObject(sagaData, Formatting.Indented, Settings));
 
-					sagaData.Revision++;
-					command.AddParameter("revision", sagaData.Revision);
-					command.AddParameter("data", JsonConvert.SerializeObject(sagaData, Formatting.Indented, Settings));
-
-					command.CommandText = string.Format(@"insert into ""{0}"" (""id"", ""revision"", ""data"") values (@id, @revision, @data)", sagaTableName);
+					command.CommandText = string.Format(
+						@"insert into {0} ({1}, {2}, {3}) values ({4}, {5}, {6})", 
+						dialect.QuoteForTableName(sagaTableName),
+						dialect.QuoteForColumnName(SAGA_ID_COLUMN),
+						dialect.QuoteForColumnName(SAGA_REVISION_COLUMN),
+						dialect.QuoteForColumnName(SAGA_DATA_COLUMN),
+						dialect.EscapeParameter(SAGA_ID_COLUMN),
+						dialect.EscapeParameter(SAGA_REVISION_COLUMN),
+						dialect.EscapeParameter(SAGA_DATA_COLUMN)
+					);
 
 					try
 					{
@@ -248,14 +275,15 @@ CREATE INDEX ON ""{0}"" (""saga_id"");
 
 		private void CreateIndex(ISagaData sagaData, ConnectionHolder connection, IEnumerable<KeyValuePair<string, string>> propertiesToIndex)
 		{
+			var dialect = connection.Dialect;
 			var sagaTypeName = GetSagaTypeName(sagaData.GetType());
 			var parameters = propertiesToIndex
 				.Select((p, i) => new
 				{
 					PropertyName = p.Key,
 					PropertyValue = p.Value ?? "",
-					PropertyNameParameter = string.Format("@n{0}", i),
-					PropertyValueParameter = string.Format("@v{0}", i)
+					PropertyNameParameter = string.Format("n{0}", i),
+					PropertyValueParameter = string.Format("v{0}", i)
 				})
 				.ToList();
 
@@ -265,11 +293,17 @@ CREATE INDEX ON ""{0}"" (""saga_id"");
 				// generate batch insert with SQL for each entry in the index
 				var inserts = parameters
 					.Select(a => string.Format(
-						@"                      insert into ""{0}""
-															(""saga_type"", ""key"", ""value"", ""saga_id"") 
-														values 
-															(@saga_type, {1}, {2}, @saga_id)",
-						sagaIndexTableName, a.PropertyNameParameter, a.PropertyValueParameter));
+							@"insert into {0} ({1}, {2}, {3}, {4}) values ({5}, {6}, {7}, {8})",
+							dialect.QuoteForTableName(sagaIndexTableName),
+							dialect.QuoteForColumnName(SAGAINDEX_TYPE_COLUMN),
+							dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),
+							dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),
+							dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),
+							dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN),
+							dialect.EscapeParameter(a.PropertyNameParameter),
+							dialect.EscapeParameter(a.PropertyValueParameter),
+							dialect.EscapeParameter(SAGAINDEX_ID_COLUMN)
+						));
 
 				var sql = string.Join(";" + Environment.NewLine, inserts);
 
@@ -277,12 +311,12 @@ CREATE INDEX ON ""{0}"" (""saga_id"");
 
 				foreach (var parameter in parameters)
 				{
-					command.AddParameter(parameter.PropertyNameParameter, DbType.String, parameter.PropertyName);
-					command.AddParameter(parameter.PropertyValueParameter, DbType.String, parameter.PropertyValue);
+					command.AddParameter(dialect.EscapeParameter(parameter.PropertyNameParameter), DbType.String, parameter.PropertyName);
+					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, parameter.PropertyValue);
 				}
 
-				command.AddParameter("saga_type", DbType.String, sagaTypeName);
-				command.AddParameter("saga_id", DbType.Guid, sagaData.Id);
+				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), DbType.String, sagaTypeName);
+				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
 
 				command.ExecuteNonQuery();
 			}
@@ -329,6 +363,8 @@ CREATE INDEX ON ""{0}"" (""saga_id"");
 		public TSagaData Find<TSagaData>(string sagaDataPropertyPath, object fieldFromMessage) where TSagaData : class, ISagaData
 		{
 			var connection = getConnection();
+			var dialect = connection.Dialect;
+
 			try
 			{
 				using (var command = connection.CreateCommand())
@@ -336,25 +372,36 @@ CREATE INDEX ON ""{0}"" (""saga_id"");
 					if (sagaDataPropertyPath == idPropertyName)
 					{
 						var id = (fieldFromMessage is Guid) ? (Guid)fieldFromMessage : Guid.Parse(fieldFromMessage.ToString());
-						const string sql = @"SELECT s.data FROM ""{0}"" s WHERE s.id = @value";
+						var parameter = dialect.EscapeParameter("value");
 
-						command.CommandText = string.Format(sql, sagaTableName);
-						command.AddParameter("value", id);
+						command.CommandText = string.Format(
+							@"SELECT s.{0} FROM {1} s WHERE s.{2} = {3}",
+							dialect.QuoteForColumnName(SAGA_DATA_COLUMN), 
+							dialect.QuoteForTableName(sagaTableName),
+							dialect.QuoteForColumnName(SAGA_ID_COLUMN),
+							parameter
+						);
+						command.AddParameter(parameter, id);
 					}
 					else
 					{
-						const string sql = @"
-SELECT s.data 
-FROM ""{0}"" s 
-JOIN ""{1}"" i on s.id = i.saga_id 
-WHERE i.""saga_type"" = @saga_type AND i.""key"" = @key AND i.value = @value
-";
+						command.CommandText = string.Format(
+							@"SELECT s.{0} " +
+							@"FROM {1} s " +
+							@"JOIN {2} i on s.{3} = i.{4} " +
+							@"WHERE i.{5} = {6} AND i.{7} = {8} AND i.{9} = {10}",
+							dialect.QuoteForColumnName(SAGA_DATA_COLUMN),
+							dialect.QuoteForTableName(sagaTableName), 
+							dialect.QuoteForTableName(sagaIndexTableName),
+							dialect.QuoteForColumnName(SAGA_ID_COLUMN), dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),
+							dialect.QuoteForColumnName(SAGAINDEX_TYPE_COLUMN), dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN),
+							dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN), dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN),
+							dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN), dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN)
 
-						command.CommandText = string.Format(sql, sagaTableName, sagaIndexTableName);
-
-						command.AddParameter("key", sagaDataPropertyPath);
-						command.AddParameter("saga_type", GetSagaTypeName(typeof(TSagaData)));
-						command.AddParameter("value", (fieldFromMessage ?? "").ToString());
+						);
+						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN), sagaDataPropertyPath);
+						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), GetSagaTypeName(typeof(TSagaData)));
+						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN), (fieldFromMessage ?? "").ToString());
 					}
 
 					var value = (string)command.ExecuteScalar();

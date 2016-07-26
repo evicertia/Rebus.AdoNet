@@ -4,6 +4,8 @@ using System.Data.Common;
 using System.Collections.Generic;
 using System.Linq;
 
+using Rebus.AdoNet.Dialects;
+
 namespace Rebus.AdoNet
 {
 	/// <summary>
@@ -11,11 +13,10 @@ namespace Rebus.AdoNet
 	/// </summary>
 	public class ConnectionHolder : IDisposable
 	{
-		ConnectionHolder(IDbConnection connection, IDbTransaction transaction)
-		{
-			Connection = connection;
-			Transaction = transaction;
-		}
+		/// <summary>
+		/// Gets the SQL dialect of the current connection.
+		/// </summary>
+		public SqlDialect Dialect { get; private set; }
 
 		/// <summary>
 		/// Gets the current open connection to the database
@@ -28,26 +29,43 @@ namespace Rebus.AdoNet
 		public IDbTransaction Transaction { get; private set; }
 
 		/// <summary>
+		/// Initializes a new instance of the <see cref="ConnectionHolder"/> class.
+		/// </summary>
+		/// <param name="connection">The connection.</param>
+		/// <param name="transaction">The transaction.</param>
+		internal ConnectionHolder(IDbConnection connection, SqlDialect dialect, IDbTransaction transaction)
+		{
+			if (connection == null) throw new ArgumentNullException(nameof(connection));
+			if (dialect == null) throw new ArgumentNullException(nameof(dialect));
+
+			Connection = connection;
+			Dialect = dialect;
+			Transaction = transaction;
+		}
+
+		/// <summary>
 		/// Constructs a <see cref="ConnectionHolder"/> instance with the given connection. The connection
 		/// will be used for non-transactional work
 		/// </summary>
-		public static ConnectionHolder ForNonTransactionalWork(IDbConnection connection)
+		public static ConnectionHolder ForNonTransactionalWork(IDbConnection connection, SqlDialect dialect)
 		{
-			if (connection == null) throw new ArgumentNullException("connection");
+			if (connection == null) throw new ArgumentNullException(nameof(connection));
+			if (dialect == null) throw new ArgumentNullException(nameof(dialect));
 
-			return new ConnectionHolder(connection, null);
+			return new ConnectionHolder(connection, dialect, null);
 		}
 
 		/// <summary>
 		/// Constructs a <see cref="ConnectionHolder"/> instance with the given connection and transaction. The connection
 		/// will be used for transactional work
 		/// </summary>
-		public static ConnectionHolder ForTransactionalWork(IDbConnection connection, IDbTransaction transaction)
+		public static ConnectionHolder ForTransactionalWork(IDbConnection connection, SqlDialect dialect, IDbTransaction transaction)
 		{
-			if (connection == null) throw new ArgumentNullException("connection");
-			if (transaction == null) throw new ArgumentNullException("transaction");
+			if (connection == null) throw new ArgumentNullException(nameof(connection));
+			if (dialect == null) throw new ArgumentNullException(nameof(dialect));
+			if (transaction == null) throw new ArgumentNullException(nameof(transaction));
 
-			return new ConnectionHolder(connection, transaction);
+			return new ConnectionHolder(connection, dialect, transaction);
 		}
 
 		/// <summary>
@@ -101,12 +119,9 @@ namespace Rebus.AdoNet
 		/// <summary>
 		/// Queries sys.Tables in the current DB
 		/// </summary>
-		internal IEnumerable<string> GetTableNames()
+		public IEnumerable<string> GetTableNames()
 		{
-			//return Connection.GetTableNames(Transaction);
-			return (Connection as DbConnection).GetSchema("Tables")
-				.Rows.OfType<DataRow>().Select(x => x["table_name"] as string)
-				.ToArray();
+			return Dialect.GetTableNames(Connection);
 		}
 	}
 }

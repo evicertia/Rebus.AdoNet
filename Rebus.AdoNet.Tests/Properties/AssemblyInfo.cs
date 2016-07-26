@@ -5,11 +5,11 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("Rebus.AdoNet")]
+[assembly: AssemblyTitle("Rebus.AdoNet.Tests")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("Rebus.AdoNet")]
+[assembly: AssemblyProduct("Rebus.AdoNet.Tests")]
 [assembly: AssemblyCopyright("Copyright © Evidencias Certificadas S.L. (2015~2016)")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
@@ -20,9 +20,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("03b56847-7469-4db3-b146-2d29ce61663e")]
-
-[assembly: InternalsVisibleTo("Rebus.AdoNet.Tests")]
+[assembly: Guid("803f12ac-8946-4718-8167-cd27077fde46")]
 
 // Version information for an assembly consists of the following four values:
 //
