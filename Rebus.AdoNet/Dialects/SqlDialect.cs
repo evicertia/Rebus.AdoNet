@@ -78,7 +78,7 @@ namespace Rebus.AdoNet.Dialects
 		}
 
 		/// <summary>
-		/// Get the name of the database type associated with the given
+		/// Get the column type of corresponding to the specified parameters.
 		/// <see cref="SqlType"/>.
 		/// </summary>
 		/// <param name="sqlType">The SqlType </param>
@@ -86,7 +86,7 @@ namespace Rebus.AdoNet.Dialects
 		/// <param name="precision">The datatype precision </param>
 		/// <param name="scale">The datatype scale </param>
 		/// <returns>The database type name used by ddl.</returns>
-		public virtual string GetTypeName(DbType type, uint length, uint precision, uint scale)
+		public virtual string GetColumnType(DbType type, uint length, uint precision, uint scale)
 		{
 			string result = _typeNames.Get(type, length, precision, scale);
 			if (result == null)
@@ -94,6 +94,19 @@ namespace Rebus.AdoNet.Dialects
 				throw new ArgumentOutOfRangeException($"No type mapping for DbType {type} of length {length}");
 			}
 			return result;
+		}
+
+		/// <summary>
+		/// Get the (identity) column type of corresponding to the specified parameters.
+		/// </summary>
+		/// <param name="type">The type.</param>
+		/// <param name="length">The length.</param>
+		/// <param name="precision">The precision.</param>
+		/// <param name="scale">The scale.</param>
+		/// <returns></returns>
+		public virtual string GetIdentityType(DbType type, uint length, uint precision, uint scale)
+		{
+			return GetColumnType(type, length, precision, scale) + " AS IDENTITY";
 		}
 
 		/// <summary>
@@ -359,10 +372,17 @@ namespace Rebus.AdoNet.Dialects
 		}
 #endif
 
-#endregion
+		#endregion
 
-		#region Create Table
+		#region Create Table / Create Index
 
+		public virtual bool SeparatePrimaryKeyDeclaration => true;
+
+		/// <summary>
+		/// Formats the create table.
+		/// </summary>
+		/// <param name="table">The table.</param>
+		/// <returns></returns>
 		public virtual string FormatCreateTable(AdoNetTable table)
 		{
 			var sb = new StringBuilder("CREATE TABLE ");
@@ -373,13 +393,15 @@ namespace Rebus.AdoNet.Dialects
 			{
 				sb.AppendFormat(" {0} {1} {2}{3}",
 					QuoteForColumnName(column.Name),
-					GetTypeName(column.DbType, column.Length, column.Precision, column.Scale),
+					column.Identity ?
+						GetIdentityType(column.DbType, column.Length, column.Precision, column.Scale)
+						: GetColumnType(column.DbType, column.Length, column.Precision, column.Scale),
 					column.Nullable ? "" : "NOT NULL",
 					(table.Columns.Last() == column) ? "" : ","
 				);
 			}
 
-			if (table.PrimaryKey != null && table.PrimaryKey.Any())
+			if (SeparatePrimaryKeyDeclaration && table.PrimaryKey != null && table.PrimaryKey.Any())
 			{
 				var columns = table.PrimaryKey.Select(x => QuoteForColumnName(x)).Aggregate((cur, next) => cur + ", " + next);
 				sb.AppendFormat(", PRIMARY KEY({0})", columns);
@@ -393,15 +415,26 @@ namespace Rebus.AdoNet.Dialects
 			{
 				foreach (var index in table.Indexes)
 				{
-					sb.AppendFormat("CREATE INDEX {0} ON {1} ({2});",
-						!string.IsNullOrEmpty(index.Name) ? QuoteForTableName(index.Name) : "",
-						QuoteForTableName(table.Name),
-						index.Columns.Select(x => QuoteForColumnName(x)).Aggregate((cur, next) => cur + ", " + next)
-					);
+					sb.Append(FormatCreateIndex(table.Name, index));
 				}
 			}
 
 			return sb.ToString();
+		}
+
+		/// <summary>
+		/// Formats the index of the create.
+		/// </summary>
+		/// <param name="table">The table.</param>
+		/// <param name="index">The index.</param>
+		/// <returns></returns>
+		public virtual string FormatCreateIndex(string table, AdoNetIndex index)
+		{
+			return string.Format("CREATE INDEX {0} ON {1} ({2});",
+				!string.IsNullOrEmpty(index.Name) ? QuoteForTableName(index.Name) : "",
+				QuoteForTableName(table),
+				index.Columns.Select(x => QuoteForColumnName(x)).Aggregate((cur, next) => cur + ", " + next)
+			);
 		}
 
 		#endregion

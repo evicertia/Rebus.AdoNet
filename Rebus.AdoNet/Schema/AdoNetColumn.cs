@@ -15,5 +15,6 @@ namespace Rebus.AdoNet.Schema
 		public uint Precision { get; set; }
 		public uint Scale { get; set; }
 		public bool Nullable { get; set; }
+		public bool Identity { get; set; }
 	}
 }

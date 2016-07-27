@@ -25,6 +25,7 @@ namespace Rebus.AdoNet.Dialects
 			RegisterColumnType(DbType.Currency, "decimal(16,4)");
 			RegisterColumnType(DbType.Date, "date");
 			RegisterColumnType(DbType.DateTime, "timestamp");
+			RegisterColumnType(DbType.DateTimeOffset, "timestamp with time zone");
 			RegisterColumnType(DbType.Decimal, "decimal(19,5)");
 			RegisterColumnType(DbType.Decimal, 19, "decimal(18, $l)");
 			RegisterColumnType(DbType.Decimal, 19, "decimal($p, $s)");
@@ -53,6 +54,17 @@ namespace Rebus.AdoNet.Dialects
 			catch
 			{
 				return false;
+			}
+		}
+
+		public override string GetIdentityType(DbType type, uint length, uint precision, uint scale)
+		{
+			switch (type)
+			{
+				case DbType.Int16: return "smallserial";
+				case DbType.Int32: return "serial";
+				case DbType.Int64: return "bigserial";
+				default: throw new ArgumentOutOfRangeException($"Invalid identity column type: {type}");
 			}
 		}
 	}

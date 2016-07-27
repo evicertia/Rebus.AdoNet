@@ -4,8 +4,6 @@ using System.IO;
 using Common.Logging;
 using NUnit.Framework;
 
-using Ponder;
-
 namespace Rebus.AdoNet
 {
 	[TestFixture]

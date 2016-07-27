@@ -6,6 +6,7 @@ using System.Linq;
 
 using Rebus.Logging;
 using Rebus.Timeout;
+using Rebus.AdoNet.Schema;
 
 namespace Rebus.AdoNet
 {
@@ -163,6 +164,8 @@ ORDER BY ""time_to_return"" ASC
 		public AdoNetTimeoutStorageFluentConfigurer EnsureTableIsCreated()
 		{
 			var connection = getConnection();
+			var dialect = connection.Dialect;
+
 			try
 			{
 				var tableNames = connection.GetTableNames();
@@ -176,26 +179,25 @@ ORDER BY ""time_to_return"" ASC
 
 				using (var command = connection.CreateCommand())
 				{
-					command.CommandText = string.Format(@"
-CREATE TABLE ""{0}"" (
-	""id"" BIGSERIAL NOT NULL,
-	""time_to_return"" TIMESTAMP WITH TIME ZONE NOT NULL,
-	""correlation_id"" VARCHAR(200) NOT NULL,
-	""saga_id"" UUID NOT NULL,
-	""reply_to"" VARCHAR(200) NOT NULL,
-	""custom_data"" TEXT NULL,
-	PRIMARY KEY (""id"")
-);
-", timeoutsTableName);
-
-					command.ExecuteNonQuery();
-				}
-
-				using (var command = connection.CreateCommand())
-				{
-					command.CommandText = string.Format(@"
-CREATE INDEX ON ""{0}"" (""time_to_return"");
-", timeoutsTableName);
+					command.CommandText = dialect.FormatCreateTable(
+						new AdoNetTable() {
+							Name = timeoutsTableName,
+							Columns = new[]
+							{
+								new AdoNetColumn() { Name = "id", DbType = DbType.Int64, Identity = true },
+								new AdoNetColumn() { Name = "time_to_return", DbType = DbType.DateTimeOffset },
+								new AdoNetColumn() { Name = "correlation_id", DbType = DbType.String, Length = 200 },
+								new AdoNetColumn() { Name = "saga_id", DbType = DbType.Guid },
+								new AdoNetColumn() { Name = "reply_to", DbType = DbType.String, Length = 200 },
+								new AdoNetColumn() { Name = "custom_data", DbType = DbType.String }
+							},
+							PrimaryKey = new[] { "id" },
+							Indexes = new[]
+							{
+								new AdoNetIndex() { Name = "ix_" + timeoutsTableName + "_alarm", Columns = new[] { "time_to_return" } }
+							}
+						}
+					);
 
 					command.ExecuteNonQuery();
 				}

@@ -9,6 +9,8 @@ namespace Rebus.AdoNet.Dialects
 {
 	public class SqliteDialect : SqlDialect
 	{
+		public override bool SeparatePrimaryKeyDeclaration => false;
+
 		public SqliteDialect()
 		{
 			RegisterColumnType(DbType.Binary, "BLOB");
@@ -32,6 +34,7 @@ namespace Rebus.AdoNet.Dialects
 
 			RegisterColumnType(DbType.Date, "DATE");
 			RegisterColumnType(DbType.DateTime, "DATETIME");
+			RegisterColumnType(DbType.DateTimeOffset, "DATETIME");
 			RegisterColumnType(DbType.Time, "TIME");
 			RegisterColumnType(DbType.Boolean, "BOOL");
 			RegisterColumnType(DbType.Guid, "UNIQUEIDENTIFIER");
@@ -62,6 +65,11 @@ namespace Rebus.AdoNet.Dialects
 			return (connection as DbConnection).GetSchema("Tables")
 				.Rows.OfType<DataRow>().Select(x => x["name"] as string)
 				.ToArray();
+		}
+
+		public override string GetIdentityType(DbType type, uint length, uint precision, uint scale)
+		{
+			return "INTEGER PRIMARY KEY AUTOINCREMENT";
 		}
 	}
 }
