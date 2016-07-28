@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Data;
@@ -15,23 +16,32 @@ namespace Rebus.AdoNet
 {
 	public abstract class DatabaseFixtureBase : IDetermineMessageOwnership
 	{
-		private const string ErrorQueueName = "error";
-		protected const string SagaTableName = "Sagas";
-		protected const string SagaIndexTableName = "SagasIndex";
+		private static readonly ILog _Log = LogManager.GetLogger<DatabaseFixtureBase>();
+
+		private const string PROVIDER_NAME = "csharp-sqlite";
+		private const string CONNECTION_STRING = @"Data Source=file://{0};Version=3;New=True;";
 		
 		protected string ConnectionString { get; }
 		protected string ProviderName { get; }
 		protected DbProviderFactory Factory { get; }
 		protected SqlDialect Dialect { get; }
 
-		protected DatabaseFixtureBase(string connectionString, string providerName)
+		protected DatabaseFixtureBase()
 		{
-			ConnectionString = connectionString;
-			ProviderName = providerName;
-			Factory = DbProviderFactories.GetFactory(providerName);
+			ConnectionString = GetConnectionString();
+			ProviderName = PROVIDER_NAME;
+			Factory = DbProviderFactories.GetFactory(ProviderName);
 			Dialect = GetDialect();
 
-			if (Dialect == null) throw new InvalidOperationException($"No valid dialect detected for: {providerName}");
+			if (Dialect == null) throw new InvalidOperationException($"No valid dialect detected for: {ProviderName}");
+		}
+
+		private static string GetConnectionString()
+		{
+			var dbfile = AssemblyFixture.TrackDisposable(new TempFile());
+			File.Delete(dbfile.Path);
+			_Log.DebugFormat("Using temporal file: {0}", dbfile.Path);
+			return string.Format(CONNECTION_STRING, dbfile.Path);
 		}
 
 		private SqlDialect GetDialect()
@@ -87,25 +97,6 @@ namespace Rebus.AdoNet
 			if (!GetTableNames().Contains(tableName, StringComparer.InvariantCultureIgnoreCase)) return;
 
 			ExecuteCommand(string.Format(@"DELETE FROM ""{0}""", tableName));
-		}
-
-		protected void DropSagaTables()
-		{
-			try
-			{
-				DropTable(SagaTableName);
-			}
-			catch
-			{
-			}
-
-			try
-			{
-				DropTable(SagaIndexTableName);
-			}
-			catch
-			{
-			}
 		}
 
 		protected virtual void OnSetUp()

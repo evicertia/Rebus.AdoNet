@@ -52,7 +52,7 @@
   <ItemGroup>
     <Compile Include="AdoNetExceptionManager.cs" />
     <Compile Include="AdoNetExtensions.cs" />
-    <Compile Include="AdoNetPersister.cs" />
+    <Compile Include="AdoNetSagaPersister.cs" />
     <Compile Include="AdoNetSagaPersisterFluentConfigurer.cs" />
     <Compile Include="Dialects\PostgreSqlDialect.cs" />
     <Compile Include="Dialects\SqliteDialect.cs" />

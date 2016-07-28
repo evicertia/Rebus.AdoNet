@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Data;
 
 using Common.Logging;
 using NUnit.Framework;
@@ -21,38 +22,103 @@ namespace Rebus.AdoNet
 			public string SomeProperty { get; set; }
 			public string AnotherProperty { get; set; }
 		}
+
+		class SomeSagaData : ISagaData
+		{
+			public Guid Id { get; set; }
+			public int Revision { get; set; }
+			public string JustSomething { get; set; }
+		}
 		#endregion
 
 		private static readonly ILog _Log = LogManager.GetLogger<SagaPersisterTests>();
-		private const string PROVIDER_NAME = "csharp-sqlite";
-		private const string CONNECTION_STRING = @"Data Source=file://{0};Version=3;New=True;";
 
-		private AdoNetSagaPersister _persister;
+		protected const string SagaTableName = "Sagas";
+		protected const string SagaIndexTableName = "SagasIndex";
 
-		public SagaPersisterTests()
-			: base(GetConnectionString(), PROVIDER_NAME)
+		#region UserProvided Connection/Transaction Helpers
+
+		private IDbConnection _connection = null;
+		private IDbTransaction _transaction = null;
+
+		private ConnectionHolder GetOrCreateConnection()
 		{
+			if (_connection != null)
+			{
+				return _transaction == null
+					? ConnectionHolder.ForNonTransactionalWork(_connection, Dialect)
+					: ConnectionHolder.ForTransactionalWork(_connection, Dialect, _transaction);
+			}
+
+			var connection = Factory.CreateConnection();
+			connection.ConnectionString = ConnectionString;
+			connection.Open();
+			_connection = connection;
+
+			return ConnectionHolder.ForNonTransactionalWork(connection, Dialect);
 		}
 
-		private static string GetConnectionString()
+		private void BeginTransaction()
 		{
-			var dbfile = AssemblyFixture.TrackDisposable(new TempFile());
-			File.Delete(dbfile.Path);
-			_Log.DebugFormat("Using temporal file: {0}", dbfile.Path);
-			return string.Format(CONNECTION_STRING, dbfile.Path);
+			if (_transaction != null)
+			{
+				throw new InvalidOperationException("Cannot begin new transaction when a transaction has already been started!");
+			}
+
+			_transaction = GetOrCreateConnection().Connection.BeginTransaction();
 		}
+
+		private void CommitTransaction()
+		{
+			if (_transaction == null)
+			{
+				throw new InvalidOperationException("Cannot commit transaction when no transaction has been started!");
+			}
+
+			_transaction.Commit();
+			_transaction = null;
+		}
+
+		#endregion
 
 		protected override void OnSetUp()
 		{
 			DropSagaTables();
-			_persister = new AdoNetSagaPersister(ConnectionString, ProviderName, SagaIndexTableName, SagaTableName);
 		}
 
+		protected void DropSagaTables()
+		{
+			try
+			{
+				DropTable(SagaTableName);
+			}
+			catch
+			{
+			}
+
+			try
+			{
+				DropTable(SagaIndexTableName);
+			}
+			catch
+			{
+			}
+		}
+
+		protected AdoNetSagaPersister CreatePersister(bool userProvidedConnection = false, bool createTables = false)
+		{
+			var result = new AdoNetSagaPersister(ConnectionString, ProviderName, SagaIndexTableName, SagaTableName);
+			if (createTables) result.EnsureTablesAreCreated();
+			return result;
+		}
+
+		#region Basic Saga Persister tests
 		[Test]
 		public void WhenIgnoringNullProperties_DoesNotSaveNullPropertiesOnUpdate()
 		{
-			_persister.EnsureTablesAreCreated()
-				.DoNotIndexNullProperties();
+			var persister = CreatePersister(createTables: true);
+
+			persister.DoNotIndexNullProperties();
 
 			const string correlationProperty1 = "correlation property 1";
 			const string correlationProperty2 = "correlation property 2";
@@ -65,23 +131,24 @@ namespace Rebus.AdoNet
 			var firstPieceOfSagaDataWithNullValueOnProperty = new PieceOfSagaData { SomeProperty = correlationProperty1, AnotherProperty = "random12423" };
 			var nextPieceOfSagaDataWithNullValueOnProperty = new PieceOfSagaData { SomeProperty = correlationProperty2, AnotherProperty = "random38791387" };
 
-			_persister.Insert(firstPieceOfSagaDataWithNullValueOnProperty, correlationPropertyPaths);
-			_persister.Insert(nextPieceOfSagaDataWithNullValueOnProperty, correlationPropertyPaths);
+			persister.Insert(firstPieceOfSagaDataWithNullValueOnProperty, correlationPropertyPaths);
+			persister.Insert(nextPieceOfSagaDataWithNullValueOnProperty, correlationPropertyPaths);
 
-			var firstPiece = _persister.Find<PieceOfSagaData>(Reflect.Path<PieceOfSagaData>(s => s.SomeProperty), correlationProperty1);
+			var firstPiece = persister.Find<PieceOfSagaData>(Reflect.Path<PieceOfSagaData>(s => s.SomeProperty), correlationProperty1);
 			firstPiece.AnotherProperty = null;
-			_persister.Update(firstPiece, correlationPropertyPaths);
+			persister.Update(firstPiece, correlationPropertyPaths);
 
-			var nextPiece = _persister.Find<PieceOfSagaData>(Reflect.Path<PieceOfSagaData>(s => s.SomeProperty), correlationProperty2);
+			var nextPiece = persister.Find<PieceOfSagaData>(Reflect.Path<PieceOfSagaData>(s => s.SomeProperty), correlationProperty2);
 			nextPiece.AnotherProperty = null;
-			_persister.Update(nextPiece, correlationPropertyPaths);
+			persister.Update(nextPiece, correlationPropertyPaths);
 		}
 
 		[Test]
 		public void WhenIgnoringNullProperties_DoesNotSaveNullPropertiesOnInsert()
 		{
-			_persister.EnsureTablesAreCreated()
-				.DoNotIndexNullProperties();
+			var persister = CreatePersister(createTables: true);
+
+			persister.DoNotIndexNullProperties();
 
 			const string correlationProperty1 = "correlation property 1";
 			const string correlationProperty2 = "correlation property 2";
@@ -104,13 +171,13 @@ namespace Rebus.AdoNet
 			var firstId = firstPieceOfSagaDataWithNullValueOnProperty.Id;
 			var nextId = nextPieceOfSagaDataWithNullValueOnProperty.Id;
 
-			_persister.Insert(firstPieceOfSagaDataWithNullValueOnProperty, correlationPropertyPaths);
+			persister.Insert(firstPieceOfSagaDataWithNullValueOnProperty, correlationPropertyPaths);
 
 			// must not throw:
-			_persister.Insert(nextPieceOfSagaDataWithNullValueOnProperty, correlationPropertyPaths);
+			persister.Insert(nextPieceOfSagaDataWithNullValueOnProperty, correlationPropertyPaths);
 
-			var firstPiece = _persister.Find<PieceOfSagaData>(Reflect.Path<PieceOfSagaData>(s => s.SomeProperty), correlationProperty1);
-			var nextPiece = _persister.Find<PieceOfSagaData>(Reflect.Path<PieceOfSagaData>(s => s.SomeProperty), correlationProperty2);
+			var firstPiece = persister.Find<PieceOfSagaData>(Reflect.Path<PieceOfSagaData>(s => s.SomeProperty), correlationProperty1);
+			var nextPiece = persister.Find<PieceOfSagaData>(Reflect.Path<PieceOfSagaData>(s => s.SomeProperty), correlationProperty2);
 
 			Assert.That(firstPiece.Id, Is.EqualTo(firstId));
 			Assert.That(nextPiece.Id, Is.EqualTo(nextId));
@@ -122,7 +189,7 @@ namespace Rebus.AdoNet
 			// arrange
 
 			// act
-			_persister.EnsureTablesAreCreated();
+			CreatePersister().EnsureTablesAreCreated();
 
 			// assert
 			var existingTables = GetTableNames();
@@ -134,14 +201,60 @@ namespace Rebus.AdoNet
 		public void DoesntDoAnythingIfTheTablesAreAlreadyThere()
 		{
 			// arrange
+			var persister = CreatePersister();
 			ExecuteCommand(@"CREATE TABLE """ + SagaTableName + @""" (""id"" INT NOT NULL)");
 			ExecuteCommand(@"CREATE TABLE """ + SagaIndexTableName + @""" (""id"" INT NOT NULL)");
 
 			// act
+
 			// assert
-			_persister.EnsureTablesAreCreated();
-			_persister.EnsureTablesAreCreated();
-			_persister.EnsureTablesAreCreated();
+			persister.EnsureTablesAreCreated();
+			persister.EnsureTablesAreCreated();
+			persister.EnsureTablesAreCreated();
 		}
+
+		#endregion
+
+		#region User Provider Connection tests
+
+		[Test]
+		public void WorksWithUserProvidedConnectionWithStartedTransaction()
+		{
+			// arrange
+			var persister = CreatePersister(userProvidedConnection: true, createTables: true);
+			var sagaId = Guid.NewGuid();
+			var sagaData = new SomeSagaData { JustSomething = "hey!", Id = sagaId };
+
+			// act
+			BeginTransaction();
+
+			// assert
+			persister.Insert(sagaData, new string[0]);
+
+			CommitTransaction();
+		}
+
+		[Test]
+		public void WorksWithUserProvidedConnectionWithoutStartedTransaction()
+		{
+			var persister = CreatePersister(userProvidedConnection: true, createTables: true);
+			var sagaId = Guid.NewGuid();
+			var sagaData = new SomeSagaData { JustSomething = "hey!", Id = sagaId };
+
+			persister.Insert(sagaData, new string[0]);
+		}
+
+		[Test]
+		public void CanCreateSagaTablesAutomaticallyWithUserProvidedConnection()
+		{
+			var persister = CreatePersister(userProvidedConnection: true, createTables: true);
+
+			var existingTables = GetTableNames();
+			Assert.That(existingTables, Contains.Item(SagaIndexTableName));
+			Assert.That(existingTables, Contains.Item(SagaTableName));
+		}
+
+		#endregion
+
 	}
 }
