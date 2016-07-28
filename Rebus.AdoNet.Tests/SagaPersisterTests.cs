@@ -1,9 +1,15 @@
 ﻿using System;
 using System.IO;
 using System.Data;
+using System.Collections.Generic;
+using System.Reflection;
 
 using Common.Logging;
 using NUnit.Framework;
+
+using Rebus;
+using Rebus.Bus;
+using Rebus.Shared;
 
 namespace Rebus.AdoNet
 {
@@ -29,6 +35,27 @@ namespace Rebus.AdoNet
 			public int Revision { get; set; }
 			public string JustSomething { get; set; }
 		}
+
+		class SomePieceOfSagaData : ISagaData
+		{
+			public Guid Id { get; set; }
+			public int Revision { get; set; }
+			public string PropertyThatCanBeNull { get; set; }
+			public string SomeValueWeCanRecognize { get; set; }
+		}
+
+		class SagaDataWithNestedElement : ISagaData
+		{
+			public Guid Id { get; set; }
+			public int Revision { get; set; }
+			public ThisOneIsNested ThisOneIsNested { get; set; }
+		}
+
+		class ThisOneIsNested
+		{
+			public string SomeString { get; set; }
+		}
+
 		#endregion
 
 		private static readonly ILog _Log = LogManager.GetLogger<SagaPersisterTests>();
@@ -81,6 +108,31 @@ namespace Rebus.AdoNet
 
 		#endregion
 
+		#region Fake Message Context Helpers
+
+		private IMessageContext _messageContext = null;
+		private static MethodInfo _MessageContextEstablishMethod = typeof(MessageContext)
+				.GetMethod("Establish", BindingFlags.Static | BindingFlags.NonPublic, null, new[] { typeof(IDictionary<string, object>) }, null);
+		private static Func<IDictionary<string, object>, MessageContext> _MessageContextEstablishAccessor =
+			x => (MessageContext)_MessageContextEstablishMethod.Invoke(null, new object[] { x });
+
+		protected IDisposable EstablishMessageContext()
+		{
+			var headers = new Dictionary<string, object>
+				{
+					{Headers.ReturnAddress, "none"},
+					{Headers.MessageId, "just_some_message_id"},
+				};
+
+			var result = new NoTransaction();
+			Disposables.TrackDisposable(result);
+			_messageContext = _MessageContextEstablishAccessor(headers);
+
+			return result;
+		}
+
+		#endregion
+
 		protected override void OnSetUp()
 		{
 			DropSagaTables();
@@ -107,12 +159,29 @@ namespace Rebus.AdoNet
 
 		protected AdoNetSagaPersister CreatePersister(bool userProvidedConnection = false, bool createTables = false)
 		{
-			var result = new AdoNetSagaPersister(ConnectionString, ProviderName, SagaIndexTableName, SagaTableName);
+			var result = userProvidedConnection ?
+				new AdoNetSagaPersister(GetOrCreateConnection, SagaTableName, SagaIndexTableName)
+				: new AdoNetSagaPersister(ConnectionString, ProviderName, SagaTableName, SagaIndexTableName);
 			if (createTables) result.EnsureTablesAreCreated();
 			return result;
 		}
 
 		#region Basic Saga Persister tests
+
+		[Test]
+		public void InsertDoesPersistSagaData()
+		{
+			var persister = CreatePersister(createTables: true);
+			var propertyName = Reflect.Path<SomePieceOfSagaData>(d => d.PropertyThatCanBeNull);
+			var dataWithIndexedNullProperty = new SomePieceOfSagaData { SomeValueWeCanRecognize = "hello" };
+
+			persister.Insert(dataWithIndexedNullProperty, new[] { propertyName });
+
+			var count = ExecuteScalar(string.Format("SELECT COUNT(*) FROM {0}", Dialect.QuoteForTableName(SagaTableName)));
+
+			Assert.That(count, Is.EqualTo(1));
+		}
+
 		[Test]
 		public void WhenIgnoringNullProperties_DoesNotSaveNullPropertiesOnUpdate()
 		{
@@ -256,5 +325,41 @@ namespace Rebus.AdoNet
 
 		#endregion
 
+		#region Advanced Saga Persister tests
+
+		[Test]
+		public void EnsuresUniquenessAlsoOnCorrelationPropertyWithNull()
+		{
+			var persister = CreatePersister(createTables: true);
+			var propertyName = Reflect.Path<SomePieceOfSagaData>(d => d.PropertyThatCanBeNull);
+			var dataWithIndexedNullProperty = new SomePieceOfSagaData { SomeValueWeCanRecognize = "hello" };
+			var anotherPieceOfDataWithIndexedNullProperty = new SomePieceOfSagaData { SomeValueWeCanRecognize = "hello" };
+
+			persister.Insert(dataWithIndexedNullProperty, new[] { propertyName });
+
+			Assert.Throws<OptimisticLockingException>(() => persister.Insert(anotherPieceOfDataWithIndexedNullProperty, new[] { propertyName }));
+		}
+
+		[Test]
+		public void CanFindAndUpdateSagaDataByCorrelationPropertyWithNull()
+		{
+			var persister = CreatePersister(createTables: true);
+			var propertyName = Reflect.Path<SomePieceOfSagaData>(d => d.PropertyThatCanBeNull);
+			var dataWithIndexedNullProperty = new SomePieceOfSagaData { SomeValueWeCanRecognize = "hello" };
+
+			persister.Insert(dataWithIndexedNullProperty, new[] { propertyName });
+			var sagaDataFoundViaNullProperty = persister.Find<SomePieceOfSagaData>(propertyName, null);
+			Assert.That(sagaDataFoundViaNullProperty, Is.Not.Null, "Could not find saga data with (null) on the correlation property {0}", propertyName);
+			Assert.That(sagaDataFoundViaNullProperty.SomeValueWeCanRecognize, Is.EqualTo("hello"));
+
+			sagaDataFoundViaNullProperty.SomeValueWeCanRecognize = "hwello there!!1";
+			persister.Update(sagaDataFoundViaNullProperty, new[] { propertyName });
+			var sagaDataFoundAgainViaNullProperty = persister.Find<SomePieceOfSagaData>(propertyName, null);
+			Assert.That(sagaDataFoundAgainViaNullProperty, Is.Not.Null, "Could not find saga data with (null) on the correlation property {0} after having updated it", propertyName);
+			Assert.That(sagaDataFoundAgainViaNullProperty.SomeValueWeCanRecognize, Is.EqualTo("hwello there!!1"));
+		}
+
+
+		#endregion
 	}
 }

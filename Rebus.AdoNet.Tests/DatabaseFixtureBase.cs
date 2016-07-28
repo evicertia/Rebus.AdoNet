@@ -25,6 +25,7 @@ namespace Rebus.AdoNet
 		protected string ProviderName { get; }
 		protected DbProviderFactory Factory { get; }
 		protected SqlDialect Dialect { get; }
+		protected DisposableTracker Disposables { get; }
 
 		protected DatabaseFixtureBase()
 		{
@@ -32,6 +33,7 @@ namespace Rebus.AdoNet
 			ProviderName = PROVIDER_NAME;
 			Factory = DbProviderFactories.GetFactory(ProviderName);
 			Dialect = GetDialect();
+			Disposables = new DisposableTracker();
 
 			if (Dialect == null) throw new InvalidOperationException($"No valid dialect detected for: {ProviderName}");
 		}
@@ -118,6 +120,7 @@ namespace Rebus.AdoNet
 		public void TearDown()
 		{
 			DoTearDown();
+			Disposables.DisposeTheDisposables();
 		}
 
 		public string GetEndpointFor(Type messageType)

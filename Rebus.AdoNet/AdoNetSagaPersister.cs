@@ -188,7 +188,7 @@ namespace Rebus.AdoNet
 					command.AddParameter(dialect.EscapeParameter(SAGA_DATA_COLUMN), JsonConvert.SerializeObject(sagaData, Formatting.Indented, Settings));
 
 					command.CommandText = string.Format(
-						@"insert into {0} ({1}, {2}, {3}) values ({4}, {5}, {6})", 
+						@"insert into {0} ({1}, {2}, {3}) values ({4}, {5}, {6});", 
 						dialect.QuoteForTableName(sagaTableName),
 						dialect.QuoteForColumnName(SAGA_ID_COLUMN),
 						dialect.QuoteForColumnName(SAGA_REVISION_COLUMN),

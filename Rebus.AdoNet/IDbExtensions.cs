@@ -28,6 +28,15 @@ namespace Rebus.AdoNet
 			}
 		}
 
+		public static IDataReader ExecuteReader(this IDbConnection connection, string commandText)
+		{
+			using (var command = connection.CreateCommand())
+			{
+				command.CommandText = commandText;
+				return command.ExecuteReader();
+			}
+		}
+
 		#endregion
 
 		#region IDbCommand Extensions

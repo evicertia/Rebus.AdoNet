@@ -5,7 +5,7 @@ using Common.Logging;
 
 namespace Rebus.AdoNet
 {
-	internal class DisposableTracker
+	public class DisposableTracker
 	{
 		private static ILog _log = LogManager.GetLogger(typeof(DisposableTracker));
 		private readonly List<IDisposable> _disposables = new List<IDisposable>();

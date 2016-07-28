@@ -391,17 +391,18 @@ namespace Rebus.AdoNet.Dialects
 
 			foreach (var column in table.Columns.ToArray())
 			{
-				sb.AppendFormat(" {0} {1} {2}{3}",
+				sb.AppendFormat(" {0} {1} {2} {3} {4}",
 					QuoteForColumnName(column.Name),
 					column.Identity ?
 						GetIdentityType(column.DbType, column.Length, column.Precision, column.Scale)
 						: GetColumnType(column.DbType, column.Length, column.Precision, column.Scale),
+					(!table.HasCompositePrimaryKey && (bool)table.PrimaryKey?.Any(x => x == column.Name)) ? "PRIMARY KEY" : "",
 					column.Nullable ? "" : "NOT NULL",
 					(table.Columns.Last() == column) ? "" : ","
 				);
 			}
 
-			if (SeparatePrimaryKeyDeclaration && table.PrimaryKey != null && table.PrimaryKey.Any())
+			if (table.HasCompositePrimaryKey && (bool)table.PrimaryKey?.Any())
 			{
 				var columns = table.PrimaryKey.Select(x => QuoteForColumnName(x)).Aggregate((cur, next) => cur + ", " + next);
 				sb.AppendFormat(", PRIMARY KEY({0})", columns);
