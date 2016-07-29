@@ -57,7 +57,9 @@ namespace Rebus.AdoNet.Dialects
 			}
 		}
 
-		public override string GetIdentityType(DbType type, uint length, uint precision, uint scale)
+		#region GetColumnType
+
+		private static string GetIdentityTypeFor(DbType type)
 		{
 			switch (type)
 			{
@@ -67,5 +69,15 @@ namespace Rebus.AdoNet.Dialects
 				default: throw new ArgumentOutOfRangeException($"Invalid identity column type: {type}");
 			}
 		}
+
+		public override string GetColumnType(DbType type, uint length, uint precision, uint scale, bool identity, bool primary)
+		{
+			var result = identity ? GetIdentityTypeFor(type)
+				: base.GetColumnType(type, length, precision, scale, identity, primary);
+
+			return string.Format("{0} {1}", result, primary ? " PRIMARY KEY" : "");
+		}
+
+		#endregion
 	}
 }

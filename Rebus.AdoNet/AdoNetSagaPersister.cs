@@ -236,10 +236,10 @@ namespace Rebus.AdoNet
 					command.CommandText = string.Format(
 						@"DELETE FROM {0} WHERE {1} = {2};",
 						dialect.QuoteForTableName(sagaIndexTableName),
-						dialect.QuoteForColumnName(SAGA_ID_COLUMN),
-						dialect.EscapeParameter(SAGA_ID_COLUMN)
+						dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),
+						dialect.EscapeParameter(SAGAINDEX_ID_COLUMN)
 					);
-					command.AddParameter(dialect.EscapeParameter(SAGA_ID_COLUMN), sagaData.Id);
+					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), sagaData.Id);
 					command.ExecuteNonQuery();
 				}
 
@@ -327,7 +327,14 @@ namespace Rebus.AdoNet
 				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), DbType.String, sagaTypeName);
 				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
 
-				command.ExecuteNonQuery();
+				try
+				{
+					command.ExecuteNonQuery();
+				}
+				catch (DbException exception)
+				{
+					throw new OptimisticLockingException(sagaData, exception);
+				}
 			}
 		}
 

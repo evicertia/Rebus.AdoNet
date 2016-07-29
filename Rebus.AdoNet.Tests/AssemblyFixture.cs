@@ -20,7 +20,7 @@ namespace Rebus.AdoNet
 			_log = LogManager.GetLogger<AssemblyFixture>();
 
 			// Ensure runtime dependency on csharp-sqlite assembly.
-			_log.InfoFormat("Using csharp-sqlite provider version: {0}", typeof(Community.CsharpSqlite.SQLiteClient.SqliteClientFactory).AssemblyQualifiedName);
+			_log.InfoFormat("Using SQLite Ado.Net provider version: {0}", typeof(System.Data.SQLite.SQLiteFactory).AssemblyQualifiedName);
 		}
 
 		[OneTimeTearDown]

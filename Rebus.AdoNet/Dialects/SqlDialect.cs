@@ -86,27 +86,18 @@ namespace Rebus.AdoNet.Dialects
 		/// <param name="precision">The datatype precision </param>
 		/// <param name="scale">The datatype scale </param>
 		/// <returns>The database type name used by ddl.</returns>
-		public virtual string GetColumnType(DbType type, uint length, uint precision, uint scale)
+		public virtual string GetColumnType(DbType type, uint length, uint precision, uint scale, bool identity, bool primary)
 		{
 			string result = _typeNames.Get(type, length, precision, scale);
 			if (result == null)
 			{
 				throw new ArgumentOutOfRangeException($"No type mapping for DbType {type} of length {length}");
 			}
-			return result;
-		}
 
-		/// <summary>
-		/// Get the (identity) column type of corresponding to the specified parameters.
-		/// </summary>
-		/// <param name="type">The type.</param>
-		/// <param name="length">The length.</param>
-		/// <param name="precision">The precision.</param>
-		/// <param name="scale">The scale.</param>
-		/// <returns></returns>
-		public virtual string GetIdentityType(DbType type, uint length, uint precision, uint scale)
-		{
-			return GetColumnType(type, length, precision, scale) + " AS IDENTITY";
+			if (identity) result += " AS IDENTITY";
+			if (primary) result += " PRIMARY KEY";
+
+			return result;
 		}
 
 		/// <summary>
@@ -391,12 +382,11 @@ namespace Rebus.AdoNet.Dialects
 
 			foreach (var column in table.Columns.ToArray())
 			{
-				sb.AppendFormat(" {0} {1} {2} {3} {4}",
+				var primaryKey = (!table.HasCompositePrimaryKey && (bool)table.PrimaryKey?.Any(x => x == column.Name));
+
+				sb.AppendFormat(" {0} {1} {2} {3}",
 					QuoteForColumnName(column.Name),
-					column.Identity ?
-						GetIdentityType(column.DbType, column.Length, column.Precision, column.Scale)
-						: GetColumnType(column.DbType, column.Length, column.Precision, column.Scale),
-					(!table.HasCompositePrimaryKey && (bool)table.PrimaryKey?.Any(x => x == column.Name)) ? "PRIMARY KEY" : "",
+					GetColumnType(column.DbType, column.Length, column.Precision, column.Scale, column.Identity, primaryKey),
 					column.Nullable ? "" : "NOT NULL",
 					(table.Columns.Last() == column) ? "" : ","
 				);

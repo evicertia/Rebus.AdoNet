@@ -18,8 +18,8 @@ namespace Rebus.AdoNet
 	{
 		private static readonly ILog _Log = LogManager.GetLogger<DatabaseFixtureBase>();
 
-		private const string PROVIDER_NAME = "csharp-sqlite";
-		private const string CONNECTION_STRING = @"Data Source=file://{0};Version=3;New=True;";
+		private const string PROVIDER_NAME = "System.Data.SQLite";
+		private const string CONNECTION_STRING = @"Data Source={0};Version=3;New=True;";
 		
 		protected string ConnectionString { get; }
 		protected string ProviderName { get; }

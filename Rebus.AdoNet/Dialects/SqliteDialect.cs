@@ -60,16 +60,11 @@ namespace Rebus.AdoNet.Dialects
 			return true;
 		}
 
-		public override IEnumerable<string> GetTableNames(IDbConnection connection)
+		public override string GetColumnType(DbType type, uint length, uint precision, uint scale, bool identity, bool primary)
 		{
-			return (connection as DbConnection).GetSchema("Tables")
-				.Rows.OfType<DataRow>().Select(x => x["name"] as string)
-				.ToArray();
-		}
-
-		public override string GetIdentityType(DbType type, uint length, uint precision, uint scale)
-		{
-			return "INTEGER PRIMARY KEY AUTOINCREMENT";
+			return identity ?
+				"INTEGER PRIMARY KEY AUTOINCREMENT" //< This is all you can get from sqlite's identity/auto-increment support.
+				: base.GetColumnType(type, length, precision, scale, identity, primary);
 		}
 	}
 }

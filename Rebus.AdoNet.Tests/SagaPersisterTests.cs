@@ -341,6 +341,19 @@ namespace Rebus.AdoNet
 		}
 
 		[Test]
+		public void EnsuresUniquenessAlsoOnCorrelationPropertyWithNull2()
+		{
+			var persister = CreatePersister(createTables: true);
+			var propertyName = Reflect.Path<SomePieceOfSagaData>(d => d.PropertyThatCanBeNull);
+			var dataWithIndexedNullProperty = new SomePieceOfSagaData { Id = Guid.NewGuid(), SomeValueWeCanRecognize = "hello" };
+			var anotherPieceOfDataWithIndexedNullProperty = new SomePieceOfSagaData { Id = Guid.NewGuid(), SomeValueWeCanRecognize = "hello" };
+
+			persister.Insert(dataWithIndexedNullProperty, new[] { propertyName });
+
+			Assert.Throws<OptimisticLockingException>(() => persister.Insert(anotherPieceOfDataWithIndexedNullProperty, new[] { propertyName }));
+		}
+
+		[Test]
 		public void CanFindAndUpdateSagaDataByCorrelationPropertyWithNull()
 		{
 			var persister = CreatePersister(createTables: true);
