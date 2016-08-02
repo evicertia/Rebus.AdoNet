@@ -14,7 +14,7 @@ using Rebus.AdoNet.Schema;
 
 namespace Rebus.AdoNet
 {
-	public abstract class DatabaseFixtureBase : IDetermineMessageOwnership
+	public abstract class DatabaseFixtureBase : FixtureBase,  IDetermineMessageOwnership
 	{
 		private static readonly ILog _Log = LogManager.GetLogger<DatabaseFixtureBase>();
 
@@ -25,7 +25,6 @@ namespace Rebus.AdoNet
 		protected string ProviderName { get; }
 		protected DbProviderFactory Factory { get; }
 		protected SqlDialect Dialect { get; }
-		protected DisposableTracker Disposables { get; }
 
 		protected DatabaseFixtureBase()
 		{
@@ -33,7 +32,6 @@ namespace Rebus.AdoNet
 			ProviderName = PROVIDER_NAME;
 			Factory = DbProviderFactories.GetFactory(ProviderName);
 			Dialect = GetDialect();
-			Disposables = new DisposableTracker();
 
 			if (Dialect == null) throw new InvalidOperationException($"No valid dialect detected for: {ProviderName}");
 		}
@@ -99,28 +97,6 @@ namespace Rebus.AdoNet
 			if (!GetTableNames().Contains(tableName, StringComparer.InvariantCultureIgnoreCase)) return;
 
 			ExecuteCommand(string.Format(@"DELETE FROM ""{0}""", tableName));
-		}
-
-		protected virtual void OnSetUp()
-		{
-		}
-
-		protected virtual void DoTearDown()
-		{
-		}
-
-		[SetUp]
-		public void SetUp()
-		{
-			//TimeMachine.Reset();
-			OnSetUp();
-		}
-
-		[TearDown]
-		public void TearDown()
-		{
-			DoTearDown();
-			Disposables.DisposeTheDisposables();
 		}
 
 		public string GetEndpointFor(Type messageType)

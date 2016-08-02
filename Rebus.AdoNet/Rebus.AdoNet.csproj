@@ -52,6 +52,7 @@
   <ItemGroup>
     <Compile Include="AdoNetExceptionManager.cs" />
     <Compile Include="AdoNetExtensions.cs" />
+    <Compile Include="AdoNetMultiSagaPersister.cs" />
     <Compile Include="AdoNetSagaPersister.cs" />
     <Compile Include="AdoNetSagaPersisterFluentConfigurer.cs" />
     <Compile Include="Dialects\PostgreSqlDialect.cs" />

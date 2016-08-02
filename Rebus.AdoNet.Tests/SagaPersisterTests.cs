@@ -152,11 +152,14 @@ namespace Rebus.AdoNet
 
 		#region Message Context Helpers
 
+#if false
 		private IMessageContext _messageContext = null;
 		private static MethodInfo _MessageContextEstablishMethod = typeof(MessageContext)
 				.GetMethod("Establish", BindingFlags.Static | BindingFlags.NonPublic, null, new[] { typeof(IDictionary<string, object>) }, null);
 		private static Func<IDictionary<string, object>, MessageContext> _MessageContextEstablishAccessor =
 			x => (MessageContext)_MessageContextEstablishMethod.Invoke(null, new object[] { x });
+
+#endif
 
 		protected IDisposable EstablishMessageContext()
 		{
@@ -168,32 +171,26 @@ namespace Rebus.AdoNet
 
 			var result = new NoTransaction();
 			Disposables.TrackDisposable(result);
-			_messageContext = _MessageContextEstablishAccessor(headers);
+			//_messageContext = _MessageContextEstablishAccessor(headers);
+			Disposables.TrackDisposable(EnterAFakeMessageContext(headers: headers));
 
 			return result;
 		}
 
-		protected void ReturnToOriginalMessageContext()
+		protected IDisposable EnterAFakeMessageContext(IDictionary<string, object> headers = null, IDictionary<string, object> items = null)
 		{
-			FakeMessageContext.Establish(_messageContext);
-		}
-
-		protected void EnterAFakeMessageContext()
-		{
+			var current = MessageContext.HasCurrent ? MessageContext.GetCurrent() : null;
 			var fakeConcurrentMessageContext = MockRepository.GenerateMock<IMessageContext>();
-			fakeConcurrentMessageContext.Stub(x => x.Headers).Return(new Dictionary<string, object>());
-			fakeConcurrentMessageContext.Stub(x => x.Items).Return(new Dictionary<string, object>());
-			FakeMessageContext.Establish(fakeConcurrentMessageContext);
+			fakeConcurrentMessageContext.Stub(x => x.Headers).Return(headers ?? new Dictionary<string, object>());
+			fakeConcurrentMessageContext.Stub(x => x.Items).Return(items ?? new Dictionary<string, object>());
+			fakeConcurrentMessageContext.Disposed += () =>
+			{
+				if (current != null) FakeMessageContext.Establish(current);
+			};
+			return FakeMessageContext.Establish(fakeConcurrentMessageContext);
 		}
-
 
 		#endregion
-
-		protected override void OnSetUp()
-		{
-			DropSagaTables();
-			EstablishMessageContext();
-		}
 
 		protected void DropSagaTables()
 		{
@@ -221,6 +218,13 @@ namespace Rebus.AdoNet
 				: new AdoNetSagaPersister(ConnectionString, ProviderName, SagaTableName, SagaIndexTableName);
 			if (createTables) result.EnsureTablesAreCreated();
 			return result;
+		}
+
+		[SetUp]
+		public new void SetUp()
+		{
+			DropSagaTables();
+			EstablishMessageContext();
 		}
 
 		#region Basic Saga Persister tests
@@ -676,13 +680,12 @@ namespace Rebus.AdoNet
 			var sagaData1 = persister.Find<SimpleSagaData>("SomeString", "hello world!");
 			sagaData1.SomeString = "I changed this on one worker";
 
-			EnterAFakeMessageContext();
-
-			var sagaData2 = persister.Find<SimpleSagaData>("SomeString", "hello world!");
-			sagaData2.SomeString = "I changed this on another worker";
-			persister.Update(sagaData2, indexBySomeString);
-
-			ReturnToOriginalMessageContext();
+			using (EnterAFakeMessageContext())
+			{
+				var sagaData2 = persister.Find<SimpleSagaData>("SomeString", "hello world!");
+				sagaData2.SomeString = "I changed this on another worker";
+				persister.Update(sagaData2, indexBySomeString);
+			}
 
 			Assert.Throws<OptimisticLockingException>(() => persister.Insert(sagaData1, indexBySomeString));
 		}
@@ -699,13 +702,12 @@ namespace Rebus.AdoNet
 			var sagaData1 = persister.Find<SimpleSagaData>("Id", id);
 			sagaData1.SomeString = "I changed this on one worker";
 
-			EnterAFakeMessageContext();
-
-			var sagaData2 = persister.Find<SimpleSagaData>("Id", id);
-			sagaData2.SomeString = "I changed this on another worker";
-			persister.Update(sagaData2, indexBySomeString);
-
-			ReturnToOriginalMessageContext();
+			using (EnterAFakeMessageContext())
+			{
+				var sagaData2 = persister.Find<SimpleSagaData>("Id", id);
+				sagaData2.SomeString = "I changed this on another worker";
+				persister.Update(sagaData2, indexBySomeString);
+			}
 
 			Assert.Throws<OptimisticLockingException>(() => persister.Insert(sagaData1, indexBySomeString));
 		}
@@ -722,10 +724,11 @@ namespace Rebus.AdoNet
 			var sagaData1 = persister.Find<SimpleSagaData>("Id", id);
 			sagaData1.SomeString = "Some new value";
 
-			EnterAFakeMessageContext();
-			var sagaData2 = persister.Find<SimpleSagaData>("Id", id);
-			persister.Delete(sagaData2);
-			ReturnToOriginalMessageContext();
+			using (EnterAFakeMessageContext())
+			{
+				var sagaData2 = persister.Find<SimpleSagaData>("Id", id);
+				persister.Delete(sagaData2);
+			}
 
 			Assert.Throws<OptimisticLockingException>(() => persister.Update(sagaData1, indexBySomeString));
 		}
@@ -741,11 +744,12 @@ namespace Rebus.AdoNet
 			persister.Insert(simpleSagaData, indexBySomeString);
 			var sagaData1 = persister.Find<SimpleSagaData>("Id", id);
 
-			EnterAFakeMessageContext();
-			var sagaData2 = persister.Find<SimpleSagaData>("Id", id);
-			sagaData2.SomeString = "Some new value";
-			persister.Update(sagaData2, indexBySomeString);
-			ReturnToOriginalMessageContext();
+			using (EnterAFakeMessageContext())
+			{
+				var sagaData2 = persister.Find<SimpleSagaData>("Id", id);
+				sagaData2.SomeString = "Some new value";
+				persister.Update(sagaData2, indexBySomeString);
+			}
 
 			Assert.Throws<OptimisticLockingException>(() => persister.Delete(sagaData1));
 		}
@@ -770,9 +774,24 @@ namespace Rebus.AdoNet
 
 		#endregion
 
-
 		#region Update Multiple Sagas Atomically
 
+		public void CanInsertTwoSagasUnderASingleContext()
+		{
+			var persister = CreatePersister(createTables: true);
+
+			var sagaId1 = Guid.NewGuid();
+			var sagaId2 = Guid.NewGuid();
+
+			persister.Insert(new SimpleSagaData { Id = sagaId1, SomeString = "FirstSaga" }, new[] { "Id" });
+			persister.Insert(new MySagaData { Id = sagaId2, AnotherField = "SecondSaga" }, new[] { "Id" });
+
+			var saga1 = persister.Find<SimpleSagaData>("Id", sagaId1);
+			var saga2 = persister.Find<MySagaData>("Id", sagaId2);
+
+			Assert.That(saga1.SomeString, Is.EqualTo("FirstSaga"));
+			Assert.That(saga2.AnotherField, Is.EqualTo("SecondSaga"));
+		}
 
 		#endregion
 

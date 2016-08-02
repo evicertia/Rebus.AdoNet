@@ -14,7 +14,8 @@ namespace Rebus.AdoNet
 
 		private AdoNetTimeoutStorage _storage;
 
-		protected override void OnSetUp()
+		[SetUp]
+		public new void SetUp()
 		{
 			DropTable(TIMEOUTS_TABLE);
 
