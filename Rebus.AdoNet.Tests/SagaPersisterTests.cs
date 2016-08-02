@@ -6,9 +6,11 @@ using System.Reflection;
 
 using Common.Logging;
 using NUnit.Framework;
+using Rhino.Mocks;
 
 using Rebus;
 using Rebus.Bus;
+using Rebus.Testing;
 using Rebus.Shared;
 
 namespace Rebus.AdoNet
@@ -56,6 +58,46 @@ namespace Rebus.AdoNet
 			public string SomeString { get; set; }
 		}
 
+
+		class SomeCollectedThing
+		{
+			public int No { get; set; }
+		}
+
+		class SomeEmbeddedThingie
+		{
+			public SomeEmbeddedThingie()
+			{
+				Thingies = new List<SomeCollectedThing>();
+			}
+
+			public string ThisIsEmbedded { get; set; }
+			public List<SomeCollectedThing> Thingies { get; set; }
+		}
+
+		class MySagaData : ISagaData
+		{
+			public string SomeField { get; set; }
+			public string AnotherField { get; set; }
+			public SomeEmbeddedThingie Embedded { get; set; }
+			public Guid Id { get; set; }
+
+			public int Revision { get; set; }
+		}
+
+		class GenericSagaData<T> : ISagaData
+		{
+			public T Property { get; set; }
+			public Guid Id { get; set; }
+			public int Revision { get; set; }
+		}
+
+		class SimpleSagaData : ISagaData
+		{
+			public string SomeString { get; set; }
+			public Guid Id { get; set; }
+			public int Revision { get; set; }
+		}
 		#endregion
 
 		private static readonly ILog _Log = LogManager.GetLogger<SagaPersisterTests>();
@@ -108,7 +150,7 @@ namespace Rebus.AdoNet
 
 		#endregion
 
-		#region Fake Message Context Helpers
+		#region Message Context Helpers
 
 		private IMessageContext _messageContext = null;
 		private static MethodInfo _MessageContextEstablishMethod = typeof(MessageContext)
@@ -131,11 +173,26 @@ namespace Rebus.AdoNet
 			return result;
 		}
 
+		protected void ReturnToOriginalMessageContext()
+		{
+			FakeMessageContext.Establish(_messageContext);
+		}
+
+		protected void EnterAFakeMessageContext()
+		{
+			var fakeConcurrentMessageContext = MockRepository.GenerateMock<IMessageContext>();
+			fakeConcurrentMessageContext.Stub(x => x.Headers).Return(new Dictionary<string, object>());
+			fakeConcurrentMessageContext.Stub(x => x.Items).Return(new Dictionary<string, object>());
+			FakeMessageContext.Establish(fakeConcurrentMessageContext);
+		}
+
+
 		#endregion
 
 		protected override void OnSetUp()
 		{
 			DropSagaTables();
+			EstablishMessageContext();
 		}
 
 		protected void DropSagaTables()
@@ -327,6 +384,33 @@ namespace Rebus.AdoNet
 
 		#region Advanced Saga Persister tests
 
+		private static void TestFindSagaByPropertyWithType<TProperty>(AdoNetSagaPersister persister, TProperty propertyValueToUse)
+		{
+			var propertyTypeToTest = typeof(TProperty);
+			var type = typeof(GenericSagaData<>);
+			var sagaDataType = type.MakeGenericType(propertyTypeToTest);
+			var savedSagaData = (ISagaData)Activator.CreateInstance(sagaDataType);
+			var savedSagaDataId = Guid.NewGuid();
+			var propertyName = nameof(GenericSagaData<TProperty>.Property);
+			savedSagaData.Id = savedSagaDataId;
+			sagaDataType.GetProperty(propertyName).SetValue(savedSagaData, propertyValueToUse, new object[0]);
+			persister.Insert(savedSagaData, new[] { propertyName });
+
+			var foundSagaData = persister.Find<GenericSagaData<TProperty>>(propertyName, propertyValueToUse);
+
+			Assert.That(foundSagaData.Id, Is.EqualTo(savedSagaDataId));
+		}
+
+		private MySagaData SagaData(int someNumber, string textInSomeField)
+		{
+			return new MySagaData
+			{
+				Id = Guid.NewGuid(),
+				SomeField = someNumber.ToString(),
+				AnotherField = textInSomeField,
+			};
+		}
+
 		[Test]
 		public void EnsuresUniquenessAlsoOnCorrelationPropertyWithNull()
 		{
@@ -372,7 +456,325 @@ namespace Rebus.AdoNet
 			Assert.That(sagaDataFoundAgainViaNullProperty.SomeValueWeCanRecognize, Is.EqualTo("hwello there!!1"));
 		}
 
+		[Test]
+		public void PersisterCanFindSagaByPropertiesWithDifferentDataTypes()
+		{
+			var persister = CreatePersister(createTables: true);
+			TestFindSagaByPropertyWithType(persister, "Hello worlds!!");
+			TestFindSagaByPropertyWithType(persister, 23);
+			TestFindSagaByPropertyWithType(persister, Guid.NewGuid());
+		}
+
+		[Test]
+		public void PersisterCanFindSagaById()
+		{
+			var persister = CreatePersister(createTables: true);
+			var savedSagaData = new MySagaData();
+			var savedSagaDataId = Guid.NewGuid();
+			savedSagaData.Id = savedSagaDataId;
+			persister.Insert(savedSagaData, new string[0]);
+
+			var foundSagaData = persister.Find<MySagaData>("Id", savedSagaDataId);
+
+			Assert.That(foundSagaData.Id, Is.EqualTo(savedSagaDataId));
+		}
+
+
+		[Test]
+		public void PersistsComplexSagaLikeExpected()
+		{
+			var persister = CreatePersister(createTables: true);
+			var sagaDataId = Guid.NewGuid();
+
+			var complexPieceOfSagaData =
+				new MySagaData
+				{
+					Id = sagaDataId,
+					SomeField = "hello",
+					AnotherField = "world!",
+					Embedded = new SomeEmbeddedThingie
+					{
+						ThisIsEmbedded = "this is embedded",
+						Thingies =
+							{
+								new SomeCollectedThing { No = 1 },
+								new SomeCollectedThing { No = 2 },
+								new SomeCollectedThing { No = 3 },
+								new SomeCollectedThing { No = 4 }
+							}
+					}
+				};
+
+			persister.Insert(complexPieceOfSagaData, new[] { "SomeField" });
+
+			var sagaData = persister.Find<MySagaData>("Id", sagaDataId);
+			Assert.That(sagaData.SomeField, Is.EqualTo("hello"));
+			Assert.That(sagaData.AnotherField, Is.EqualTo("world!"));
+		}
+
+		[Test]
+		public void CanDeleteSaga()
+		{
+			const string someStringValue = "whoolala";
+
+			var persister = CreatePersister(createTables: true);
+			var mySagaDataId = Guid.NewGuid();
+			var mySagaData = new SimpleSagaData
+			{
+				Id = mySagaDataId,
+				SomeString = someStringValue
+			};
+
+			persister.Insert(mySagaData, new[] { "SomeString" });
+			var sagaDataToDelete = persister.Find<SimpleSagaData>("Id", mySagaDataId);
+
+			persister.Delete(sagaDataToDelete);
+
+			var sagaData = persister.Find<SimpleSagaData>("Id", mySagaDataId);
+			Assert.That(sagaData, Is.Null);
+		}
+
+		[Test]
+		public void CanFindSagaByPropertyValues()
+		{
+			var persister = CreatePersister(createTables: true);
+
+			persister.Insert(SagaData(1, "some field 1"), new[] { "AnotherField" });
+			persister.Insert(SagaData(2, "some field 2"), new[] { "AnotherField" });
+			persister.Insert(SagaData(3, "some field 3"), new[] { "AnotherField" });
+
+			var dataViaNonexistentValue = persister.Find<MySagaData>("AnotherField", "non-existent value");
+			var dataViaNonexistentField = persister.Find<MySagaData>("SomeFieldThatDoesNotExist", "doesn't matter");
+			var mySagaData = persister.Find<MySagaData>("AnotherField", "some field 2");
+
+			Assert.That(dataViaNonexistentField, Is.Null);
+			Assert.That(dataViaNonexistentValue, Is.Null);
+			Assert.That(mySagaData.SomeField, Is.EqualTo("2"));
+		}
+
+		[Test]
+		public void SamePersisterCanSaveMultipleTypesOfSagaDatas()
+		{
+			var persister = CreatePersister(createTables: true);
+			var sagaId1 = Guid.NewGuid();
+			var sagaId2 = Guid.NewGuid();
+			persister.Insert(new SimpleSagaData { Id = sagaId1, SomeString = "Ol�" }, new[] { "Id" });
+			persister.Insert(new MySagaData { Id = sagaId2, AnotherField = "Yipiie" }, new[] { "Id" });
+
+			var saga1 = persister.Find<SimpleSagaData>("Id", sagaId1);
+			var saga2 = persister.Find<MySagaData>("Id", sagaId2);
+
+			Assert.That(saga1.SomeString, Is.EqualTo("Ol�"));
+			Assert.That(saga2.AnotherField, Is.EqualTo("Yipiie"));
+		}
+
+
+		[Test]
+		public void PersisterCanFindSagaDataWithNestedElements()
+		{
+			const string stringValue = "I expect to find something with this string!";
+
+			var persister = CreatePersister(createTables: true);
+			var path = Reflect.Path<SagaDataWithNestedElement>(d => d.ThisOneIsNested.SomeString);
+
+			persister.Insert(new SagaDataWithNestedElement
+			{
+				Id = Guid.NewGuid(),
+				Revision = 12,
+				ThisOneIsNested = new ThisOneIsNested
+				{
+					SomeString = stringValue
+				}
+			}, new[] { path });
+
+			var loadedSagaData = persister.Find<SagaDataWithNestedElement>(path, stringValue);
+
+			Assert.That(loadedSagaData.ThisOneIsNested, Is.Not.Null);
+			Assert.That(loadedSagaData.ThisOneIsNested.SomeString, Is.EqualTo(stringValue));
+		}
 
 		#endregion
+
+		#region Uniqueness Of CorrelationIds
+
+		internal class SomeSaga : ISagaData
+		{
+			public Guid Id { get; set; }
+			public int Revision { get; set; }
+
+			public string SomeCorrelationId { get; set; }
+		}
+
+		[Test, Description("We don't allow two sagas to have the same value of a property that is used to correlate with incoming messages, " +
+						   "because that would cause an ambiguity if an incoming message suddenly mathed two or more sagas... " +
+						   "moreover, e.g. MongoDB would not be able to handle the message and update multiple sagas reliably because it doesn't have transactions.")]
+		public void CannotInsertAnotherSagaWithDuplicateCorrelationId()
+		{
+			// arrange
+			var persister = CreatePersister(createTables: true);
+			var theValue = "this just happens to be the same in two sagas";
+			var firstSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
+			var secondSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
+
+			var pathsToIndex = new[] { Reflect.Path<SomeSaga>(s => s.SomeCorrelationId) };
+			persister.Insert(firstSaga, pathsToIndex);
+
+			// act
+			// assert
+			Assert.Throws<OptimisticLockingException>(() => persister.Insert(secondSaga, pathsToIndex));
+		}
+
+		[Test]
+		public void CannotUpdateAnotherSagaWithDuplicateCorrelationId()
+		{
+			// arrange  
+			var persister = CreatePersister(createTables: true);
+			var theValue = "this just happens to be the same in two sagas";
+			var firstSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
+			var secondSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = "other value" };
+
+			var pathsToIndex = new[] { Reflect.Path<SomeSaga>(s => s.SomeCorrelationId) };
+			persister.Insert(firstSaga, pathsToIndex);
+			persister.Insert(secondSaga, pathsToIndex);
+
+			// act
+			// assert
+			secondSaga.SomeCorrelationId = theValue;
+			Assert.Throws<OptimisticLockingException>(() => persister.Update(secondSaga, pathsToIndex));
+		}
+
+		[Test]
+		public void CanUpdateSaga()
+		{
+			// arrange
+			const string theValue = "this is just some value";
+
+			var persister = CreatePersister(createTables: true);
+			var firstSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
+
+			var propertyPath = Reflect.Path<SomeSaga>(s => s.SomeCorrelationId);
+			var pathsToIndex = new[] { propertyPath };
+			persister.Insert(firstSaga, pathsToIndex);
+
+			var sagaToUpdate = persister.Find<SomeSaga>(propertyPath, theValue);
+
+			Assert.DoesNotThrow(() => persister.Update(sagaToUpdate, pathsToIndex));
+		}
+		#endregion
+
+		#region Optimistic Concurrency
+
+		[Test]
+		public void UsesOptimisticLockingAndDetectsRaceConditionsWhenUpdatingFindingBySomeProperty()
+		{
+			var persister = CreatePersister(createTables: true);
+			var indexBySomeString = new[] { "SomeString" };
+			var id = Guid.NewGuid();
+			var simpleSagaData = new SimpleSagaData { Id = id, SomeString = "hello world!" };
+			persister.Insert(simpleSagaData, indexBySomeString);
+
+			var sagaData1 = persister.Find<SimpleSagaData>("SomeString", "hello world!");
+			sagaData1.SomeString = "I changed this on one worker";
+
+			EnterAFakeMessageContext();
+
+			var sagaData2 = persister.Find<SimpleSagaData>("SomeString", "hello world!");
+			sagaData2.SomeString = "I changed this on another worker";
+			persister.Update(sagaData2, indexBySomeString);
+
+			ReturnToOriginalMessageContext();
+
+			Assert.Throws<OptimisticLockingException>(() => persister.Insert(sagaData1, indexBySomeString));
+		}
+
+		[Test]
+		public void UsesOptimisticLockingAndDetectsRaceConditionsWhenUpdatingFindingById()
+		{
+			var persister = CreatePersister(createTables: true);
+			var indexBySomeString = new[] { "Id" };
+			var id = Guid.NewGuid();
+			var simpleSagaData = new SimpleSagaData { Id = id, SomeString = "hello world!" };
+			persister.Insert(simpleSagaData, indexBySomeString);
+
+			var sagaData1 = persister.Find<SimpleSagaData>("Id", id);
+			sagaData1.SomeString = "I changed this on one worker";
+
+			EnterAFakeMessageContext();
+
+			var sagaData2 = persister.Find<SimpleSagaData>("Id", id);
+			sagaData2.SomeString = "I changed this on another worker";
+			persister.Update(sagaData2, indexBySomeString);
+
+			ReturnToOriginalMessageContext();
+
+			Assert.Throws<OptimisticLockingException>(() => persister.Insert(sagaData1, indexBySomeString));
+		}
+
+		[Test]
+		public void ConcurrentDeleteAndUpdateThrowsOnUpdate()
+		{
+			var persister = CreatePersister(createTables: true);
+			var indexBySomeString = new[] { "Id" };
+			var id = Guid.NewGuid();
+			var simpleSagaData = new SimpleSagaData { Id = id };
+
+			persister.Insert(simpleSagaData, indexBySomeString);
+			var sagaData1 = persister.Find<SimpleSagaData>("Id", id);
+			sagaData1.SomeString = "Some new value";
+
+			EnterAFakeMessageContext();
+			var sagaData2 = persister.Find<SimpleSagaData>("Id", id);
+			persister.Delete(sagaData2);
+			ReturnToOriginalMessageContext();
+
+			Assert.Throws<OptimisticLockingException>(() => persister.Update(sagaData1, indexBySomeString));
+		}
+
+		[Test]
+		public void ConcurrentDeleteAndUpdateThrowsOnDelete()
+		{
+			var persister = CreatePersister(createTables: true);
+			var indexBySomeString = new[] { "Id" };
+			var id = Guid.NewGuid();
+			var simpleSagaData = new SimpleSagaData { Id = id };
+
+			persister.Insert(simpleSagaData, indexBySomeString);
+			var sagaData1 = persister.Find<SimpleSagaData>("Id", id);
+
+			EnterAFakeMessageContext();
+			var sagaData2 = persister.Find<SimpleSagaData>("Id", id);
+			sagaData2.SomeString = "Some new value";
+			persister.Update(sagaData2, indexBySomeString);
+			ReturnToOriginalMessageContext();
+
+			Assert.Throws<OptimisticLockingException>(() => persister.Delete(sagaData1));
+		}
+
+		[Test]
+		public void InsertingTheSameSagaDataTwiceGeneratesAnError()
+		{
+			// arrange
+			var persister = CreatePersister(createTables: true);
+			var sagaDataPropertyPathsToIndex = new[] { Reflect.Path<SimpleSagaData>(d => d.Id) };
+
+			var sagaId = Guid.NewGuid();
+			persister.Insert(new SimpleSagaData { Id = sagaId, Revision = 0, SomeString = "hello!" },
+							 sagaDataPropertyPathsToIndex);
+
+			// act
+			// assert
+			Assert.Throws<OptimisticLockingException>(
+				() => persister.Insert(new SimpleSagaData { Id = sagaId, Revision = 0, SomeString = "hello!" },
+									   sagaDataPropertyPathsToIndex));
+		}
+
+		#endregion
+
+
+		#region Update Multiple Sagas Atomically
+
+
+		#endregion
+
 	}
 }
