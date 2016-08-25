@@ -33,19 +33,17 @@ namespace Rebus.AdoNet
 
 		protected AdoNetStorage(string connectionString, string providerName)
 		{
-			_factory = DbProviderFactories.GetFactory(providerName); 
+			_factory = DbProviderFactories.GetFactory(providerName);
+			//getConnection = () => GetConnection(_factory, connectionString);
 			getConnection = () => CreateConnection(_factory, connectionString);
 			commitAction = x => x.Commit();
-			rollbackAction = x => x.Rollback();
+			rollbackAction = x => x.Abort();
 			releaseConnection = x => x.Dispose();
 		}
 
 		private static ConnectionHolder CreateConnection(DbProviderFactory factory, string connectionString)
 		{
-			var connection = factory.CreateConnection();
-			connection.ConnectionString = connectionString;
-			connection.Open();
-
+			var connection = factory.OpenConnection(connectionString);
 			var dialect = _dialects.GetOrAdd(connectionString, x => SqlDialect.GetDialectFor(connection));
 			if (dialect == null) throw new InvalidOperationException($"Unable to guess dialect for: {connectionString}");
 
@@ -57,5 +55,14 @@ namespace Rebus.AdoNet
 
 			return ConnectionHolder.ForNonTransactionalWork(connection, dialect);
 		}
+#if false
+		private static ConnectionHolder GetConnection(DbProviderFactory factory, string connectionString)
+		{
+			// If there no established message context, just return an isolated connection.
+			if (!MessageContext.HasCurrent) return CreateConnection(factory, connectionString);
+
+
+		}
+#endif
 	}
 }

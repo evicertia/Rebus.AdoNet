@@ -170,7 +170,6 @@ namespace Rebus.AdoNet
 				};
 
 			var result = new NoTransaction();
-			Disposables.TrackDisposable(result);
 			//_messageContext = _MessageContextEstablishAccessor(headers);
 			Disposables.TrackDisposable(EnterAFakeMessageContext(headers: headers));
 
@@ -224,7 +223,7 @@ namespace Rebus.AdoNet
 		public new void SetUp()
 		{
 			DropSagaTables();
-			EstablishMessageContext();
+			Disposables.TrackDisposable(EstablishMessageContext()); //< Initial (fake) message under each test will run.
 		}
 
 		#region Basic Saga Persister tests
@@ -776,21 +775,49 @@ namespace Rebus.AdoNet
 
 		#region Update Multiple Sagas Atomically
 
-		public void CanInsertTwoSagasUnderASingleContext()
+		[Test]
+		public void CanInsertTwoSagasUnderASingleUoW()
 		{
 			var persister = CreatePersister(createTables: true);
-
 			var sagaId1 = Guid.NewGuid();
 			var sagaId2 = Guid.NewGuid();
 
-			persister.Insert(new SimpleSagaData { Id = sagaId1, SomeString = "FirstSaga" }, new[] { "Id" });
-			persister.Insert(new MySagaData { Id = sagaId2, AnotherField = "SecondSaga" }, new[] { "Id" });
+			using (var uow = new AdoNetUnitOfWorkManager().Create())
+			{
+				persister.Insert(new SimpleSagaData { Id = sagaId1, SomeString = "FirstSaga" }, new[] { "Id" });
+				persister.Insert(new MySagaData { Id = sagaId2, AnotherField = "SecondSaga" }, new[] { "Id" });
+
+				uow.Commit();
+			}
 
 			var saga1 = persister.Find<SimpleSagaData>("Id", sagaId1);
 			var saga2 = persister.Find<MySagaData>("Id", sagaId2);
 
 			Assert.That(saga1.SomeString, Is.EqualTo("FirstSaga"));
 			Assert.That(saga2.AnotherField, Is.EqualTo("SecondSaga"));
+		}
+
+		[Test]
+		public void NoChangesAreMadeWhenUoWIsNotCommitted()
+		{
+			var persister = CreatePersister(createTables: true);
+			var sagaId1 = Guid.NewGuid();
+			var sagaId2 = Guid.NewGuid();
+
+			using (var uow = new AdoNetUnitOfWorkManager().Create())
+			{
+				persister.Insert(new SimpleSagaData { Id = sagaId1, SomeString = "FirstSaga" }, new[] { "Id" });
+				persister.Insert(new MySagaData { Id = sagaId2, AnotherField = "SecondSaga" }, new[] { "Id" });
+
+				// XXX: Purposedly not committed.
+			}
+
+			var saga1 = persister.Find<SimpleSagaData>("Id", sagaId1);
+			var saga2 = persister.Find<MySagaData>("Id", sagaId2);
+
+			Assert.That(saga1, Is.Null);
+			Assert.That(saga2, Is.Null);
+
 		}
 
 		#endregion

@@ -55,9 +55,11 @@
     <Compile Include="AdoNetMultiSagaPersister.cs" />
     <Compile Include="AdoNetSagaPersister.cs" />
     <Compile Include="AdoNetSagaPersisterFluentConfigurer.cs" />
+    <Compile Include="AdoNetUnitOfWorkManager.cs" />
     <Compile Include="Dialects\PostgreSqlDialect.cs" />
     <Compile Include="Dialects\SqliteDialect.cs" />
     <Compile Include="Dialects\TypeNames.cs" />
+    <Compile Include="AdoNetUnitOfWork.cs" />
     <Compile Include="netfx\System\Guard.cs" />
     <Compile Include="Schema\AdoNetColumn.cs" />
     <Compile Include="Schema\AdoNetIndex.cs" />

@@ -8,6 +8,19 @@ namespace Rebus.AdoNet
 {
 	internal static class IDbExtensions
 	{
+		#region DbProviderFactory
+
+		public static IDbConnection OpenConnection(this DbProviderFactory @this, string connectionString)
+		{
+			var connection = @this.CreateConnection();
+			connection.ConnectionString = connectionString;
+			connection.Open();
+
+			return connection;
+		}
+
+		#endregion
+
 		#region IDbConnection Extensions
 
 		public static void ExecuteCommand(this IDbConnection connection, string commandText)

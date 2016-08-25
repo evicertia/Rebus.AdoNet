@@ -4,6 +4,8 @@ using System.Data.Common;
 using System.Collections.Generic;
 using System.Linq;
 
+using Rebus;
+using Rebus.Bus;
 using Rebus.AdoNet.Dialects;
 
 namespace Rebus.AdoNet
@@ -28,12 +30,14 @@ namespace Rebus.AdoNet
 		/// </summary>
 		public IDbTransaction Transaction { get; private set; }
 
+		public IUnitOfWork UnitOfWork { get; private set; }
+
 		/// <summary>
 		/// Initializes a new instance of the <see cref="ConnectionHolder"/> class.
 		/// </summary>
 		/// <param name="connection">The connection.</param>
 		/// <param name="transaction">The transaction.</param>
-		internal ConnectionHolder(IDbConnection connection, SqlDialect dialect, IDbTransaction transaction)
+		internal ConnectionHolder(IDbConnection connection, SqlDialect dialect, IDbTransaction transaction, IUnitOfWork unitOfWork = null)
 		{
 			if (connection == null) throw new ArgumentNullException(nameof(connection));
 			if (dialect == null) throw new ArgumentNullException(nameof(dialect));
@@ -41,13 +45,14 @@ namespace Rebus.AdoNet
 			Connection = connection;
 			Dialect = dialect;
 			Transaction = transaction;
+			UnitOfWork = unitOfWork;
 		}
 
 		/// <summary>
 		/// Constructs a <see cref="ConnectionHolder"/> instance with the given connection. The connection
 		/// will be used for non-transactional work
 		/// </summary>
-		public static ConnectionHolder ForNonTransactionalWork(IDbConnection connection, SqlDialect dialect)
+		internal static ConnectionHolder ForNonTransactionalWork(IDbConnection connection, SqlDialect dialect)
 		{
 			if (connection == null) throw new ArgumentNullException(nameof(connection));
 			if (dialect == null) throw new ArgumentNullException(nameof(dialect));
@@ -59,13 +64,20 @@ namespace Rebus.AdoNet
 		/// Constructs a <see cref="ConnectionHolder"/> instance with the given connection and transaction. The connection
 		/// will be used for transactional work
 		/// </summary>
-		public static ConnectionHolder ForTransactionalWork(IDbConnection connection, SqlDialect dialect, IDbTransaction transaction)
+		internal static ConnectionHolder ForTransactionalWork(IDbConnection connection, SqlDialect dialect, IDbTransaction transaction)
 		{
 			if (connection == null) throw new ArgumentNullException(nameof(connection));
 			if (dialect == null) throw new ArgumentNullException(nameof(dialect));
 			if (transaction == null) throw new ArgumentNullException(nameof(transaction));
 
 			return new ConnectionHolder(connection, dialect, transaction);
+		}
+
+		internal static ConnectionHolder ForUnitOfWork(AdoNetUnitOfWork unitOfWork, SqlDialect dialect)
+		{
+			if (unitOfWork == null) throw new ArgumentNullException(nameof(unitOfWork));
+
+			return new ConnectionHolder(unitOfWork.Connection, dialect, null, unitOfWork: unitOfWork);
 		}
 
 		/// <summary>
@@ -109,7 +121,7 @@ namespace Rebus.AdoNet
 		/// <summary>
 		/// Rolls back the transaction is one is present
 		/// </summary>
-		public void Rollback()
+		public void Abort()
 		{
 			if (Transaction == null) return;
 
