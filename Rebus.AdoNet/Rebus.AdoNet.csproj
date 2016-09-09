@@ -50,12 +50,13 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AdoNetConnectionFactory.cs" />
     <Compile Include="AdoNetExceptionManager.cs" />
     <Compile Include="AdoNetExtensions.cs" />
-    <Compile Include="AdoNetMultiSagaPersister.cs" />
     <Compile Include="AdoNetSagaPersister.cs" />
     <Compile Include="AdoNetSagaPersisterFluentConfigurer.cs" />
     <Compile Include="AdoNetUnitOfWorkManager.cs" />
+    <Compile Include="AdoNetUnitOfWorkScope.cs" />
     <Compile Include="Dialects\PostgreSqlDialect.cs" />
     <Compile Include="Dialects\SqliteDialect.cs" />
     <Compile Include="Dialects\TypeNames.cs" />

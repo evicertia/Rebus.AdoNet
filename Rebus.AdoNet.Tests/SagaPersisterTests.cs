@@ -102,53 +102,9 @@ namespace Rebus.AdoNet
 
 		private static readonly ILog _Log = LogManager.GetLogger<SagaPersisterTests>();
 
-		protected const string SagaTableName = "Sagas";
-		protected const string SagaIndexTableName = "SagasIndex";
-
-		#region UserProvided Connection/Transaction Helpers
-
-		private IDbConnection _connection = null;
-		private IDbTransaction _transaction = null;
-
-		private ConnectionHolder GetOrCreateConnection()
-		{
-			if (_connection != null)
-			{
-				return _transaction == null
-					? ConnectionHolder.ForNonTransactionalWork(_connection, Dialect)
-					: ConnectionHolder.ForTransactionalWork(_connection, Dialect, _transaction);
-			}
-
-			var connection = Factory.CreateConnection();
-			connection.ConnectionString = ConnectionString;
-			connection.Open();
-			_connection = connection;
-
-			return ConnectionHolder.ForNonTransactionalWork(connection, Dialect);
-		}
-
-		private void BeginTransaction()
-		{
-			if (_transaction != null)
-			{
-				throw new InvalidOperationException("Cannot begin new transaction when a transaction has already been started!");
-			}
-
-			_transaction = GetOrCreateConnection().Connection.BeginTransaction();
-		}
-
-		private void CommitTransaction()
-		{
-			if (_transaction == null)
-			{
-				throw new InvalidOperationException("Cannot commit transaction when no transaction has been started!");
-			}
-
-			_transaction.Commit();
-			_transaction = null;
-		}
-
-		#endregion
+		private AdoNetConnectionFactory _factory;
+		private const string SagaTableName = "Sagas";
+		private const string SagaIndexTableName = "SagasIndex";
 
 		#region Message Context Helpers
 
@@ -210,14 +166,19 @@ namespace Rebus.AdoNet
 			}
 		}
 
-		protected AdoNetSagaPersister CreatePersister(bool userProvidedConnection = false, bool createTables = false)
+		protected AdoNetSagaPersister CreatePersister(bool createTables = false)
 		{
-			var result = userProvidedConnection ?
-				new AdoNetSagaPersister(GetOrCreateConnection, SagaTableName, SagaIndexTableName)
-				: new AdoNetSagaPersister(ConnectionString, ProviderName, SagaTableName, SagaIndexTableName);
+			var result = new AdoNetSagaPersister(_factory, SagaTableName, SagaIndexTableName);
 			if (createTables) result.EnsureTablesAreCreated();
 			return result;
 		}
+
+		[OneTimeSetUp]
+		public void OneTimeSetup()
+		{
+			_factory = new AdoNetConnectionFactory(ConnectionString, ProviderName);
+		}
+
 
 		[SetUp]
 		public new void SetUp()
@@ -340,47 +301,6 @@ namespace Rebus.AdoNet
 			persister.EnsureTablesAreCreated();
 			persister.EnsureTablesAreCreated();
 			persister.EnsureTablesAreCreated();
-		}
-
-		#endregion
-
-		#region User Provider Connection tests
-
-		[Test]
-		public void WorksWithUserProvidedConnectionWithStartedTransaction()
-		{
-			// arrange
-			var persister = CreatePersister(userProvidedConnection: true, createTables: true);
-			var sagaId = Guid.NewGuid();
-			var sagaData = new SomeSagaData { JustSomething = "hey!", Id = sagaId };
-
-			// act
-			BeginTransaction();
-
-			// assert
-			persister.Insert(sagaData, new string[0]);
-
-			CommitTransaction();
-		}
-
-		[Test]
-		public void WorksWithUserProvidedConnectionWithoutStartedTransaction()
-		{
-			var persister = CreatePersister(userProvidedConnection: true, createTables: true);
-			var sagaId = Guid.NewGuid();
-			var sagaData = new SomeSagaData { JustSomething = "hey!", Id = sagaId };
-
-			persister.Insert(sagaData, new string[0]);
-		}
-
-		[Test]
-		public void CanCreateSagaTablesAutomaticallyWithUserProvidedConnection()
-		{
-			var persister = CreatePersister(userProvidedConnection: true, createTables: true);
-
-			var existingTables = GetTableNames();
-			Assert.That(existingTables, Contains.Item(SagaIndexTableName));
-			Assert.That(existingTables, Contains.Item(SagaTableName));
 		}
 
 		#endregion
@@ -782,7 +702,7 @@ namespace Rebus.AdoNet
 			var sagaId1 = Guid.NewGuid();
 			var sagaId2 = Guid.NewGuid();
 
-			using (var uow = new AdoNetUnitOfWorkManager().Create())
+			using (var uow = new AdoNetUnitOfWorkManager(_factory).Create())
 			{
 				persister.Insert(new SimpleSagaData { Id = sagaId1, SomeString = "FirstSaga" }, new[] { "Id" });
 				persister.Insert(new MySagaData { Id = sagaId2, AnotherField = "SecondSaga" }, new[] { "Id" });
@@ -790,11 +710,14 @@ namespace Rebus.AdoNet
 				uow.Commit();
 			}
 
-			var saga1 = persister.Find<SimpleSagaData>("Id", sagaId1);
-			var saga2 = persister.Find<MySagaData>("Id", sagaId2);
+			using (EnterAFakeMessageContext())
+			{
+				var saga1 = persister.Find<SimpleSagaData>("Id", sagaId1);
+				var saga2 = persister.Find<MySagaData>("Id", sagaId2);
 
-			Assert.That(saga1.SomeString, Is.EqualTo("FirstSaga"));
-			Assert.That(saga2.AnotherField, Is.EqualTo("SecondSaga"));
+				Assert.That(saga1.SomeString, Is.EqualTo("FirstSaga"));
+				Assert.That(saga2.AnotherField, Is.EqualTo("SecondSaga"));
+			}
 		}
 
 		[Test]
@@ -804,7 +727,7 @@ namespace Rebus.AdoNet
 			var sagaId1 = Guid.NewGuid();
 			var sagaId2 = Guid.NewGuid();
 
-			using (var uow = new AdoNetUnitOfWorkManager().Create())
+			using (var uow = new AdoNetUnitOfWorkManager(_factory).Create())
 			{
 				persister.Insert(new SimpleSagaData { Id = sagaId1, SomeString = "FirstSaga" }, new[] { "Id" });
 				persister.Insert(new MySagaData { Id = sagaId2, AnotherField = "SecondSaga" }, new[] { "Id" });
@@ -812,12 +735,14 @@ namespace Rebus.AdoNet
 				// XXX: Purposedly not committed.
 			}
 
-			var saga1 = persister.Find<SimpleSagaData>("Id", sagaId1);
-			var saga2 = persister.Find<MySagaData>("Id", sagaId2);
+			using (EnterAFakeMessageContext())
+			{
+				var saga1 = persister.Find<SimpleSagaData>("Id", sagaId1);
+				var saga2 = persister.Find<MySagaData>("Id", sagaId2);
 
-			Assert.That(saga1, Is.Null);
-			Assert.That(saga2, Is.Null);
-
+				Assert.That(saga1, Is.Null);
+				Assert.That(saga2, Is.Null);
+			}
 		}
 
 		#endregion

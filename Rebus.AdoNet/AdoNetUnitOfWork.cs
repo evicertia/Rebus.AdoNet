@@ -14,10 +14,11 @@ namespace Rebus.AdoNet
 	internal class AdoNetUnitOfWork : IUnitOfWork
 	{
 		private static ILog _log;
+		private readonly AdoNetConnectionFactory _factory;
 		private IDbConnection _connection;
 		private IDbTransaction _transaction;
-
-		public IDbConnection Connection => _connection;
+		private bool _aborted;
+		private bool _autodispose;
 
 		static AdoNetUnitOfWork()
 		{
@@ -25,31 +26,26 @@ namespace Rebus.AdoNet
 
 		}
 
-		public AdoNetUnitOfWork()
+		public AdoNetUnitOfWork(AdoNetConnectionFactory factory, bool autodispose)
 		{
-			_log.Debug("Created new instance");
-		}
+			if (factory == null) throw new ArgumentNullException(nameof(factory));
 
-		public AdoNetUnitOfWork(IDbConnection connection)
-		{
-			if (connection == null) throw new ArgumentNullException(nameof(connection));
-
-			_connection = connection;
+			_factory = factory;
+			_connection = factory.OpenConnection();
 			_transaction = _connection.BeginTransaction(IsolationLevel.ReadCommitted); //< We may require 'Serializable' as our default.
+			_autodispose = autodispose;
 
 			_log.Debug("Created new instance with connection {0} and transaction {1}", _connection.GetHashCode(), _transaction.GetHashCode());
 		}
 
-		public void Use(IDbConnection connection)
+		public AdoNetUnitOfWorkScope GetScope()
 		{
-			if (connection == null) throw new ArgumentNullException(nameof(connection));
-			if (_connection != null) throw new InvalidOperationException("UnitOfWork already using a connection?!");
-
-			_connection = connection;
-			_transaction = _connection.BeginTransaction(IsolationLevel.ReadCommitted); //< We may require 'Serializable' as our default.
-
-			_log.Debug("Using connection {0} and transaction {1}", _connection.GetHashCode(), _transaction.GetHashCode());
-
+			return new AdoNetUnitOfWorkScope(this, _factory.Dialect, _connection, onDispose: !_autodispose ? (Action)null :
+				() =>
+				{
+					if (!_aborted) Commit();
+					this.Dispose();
+				});
 		}
 
 		public void Abort()
@@ -58,6 +54,7 @@ namespace Rebus.AdoNet
 
 			_log.Debug("Rolling back transaction: {0}...", _transaction.GetHashCode());
 			_transaction.Rollback();
+			_aborted = true;
 			_log.Debug("Rolled back transaction: {0}...", _transaction.GetHashCode());
 		}
 
@@ -69,8 +66,6 @@ namespace Rebus.AdoNet
 			_transaction.Commit();
 			_log.Debug("Committed transaction: {0}...", _transaction.GetHashCode());
 		}
-
-
 
 		#region IDisposable
 		private bool _disposed = false; // To detect redundant calls

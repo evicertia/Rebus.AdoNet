@@ -12,13 +12,10 @@ using Rebus.AdoNet.Schema;
 
 namespace Rebus.AdoNet
 {
-	// TODO: Maybe we can use something to dynamically adapt queries
-	//		 for each SQL dialec. Like: https://github.com/candoumbe/Queries
-
 	/// <summary>
 	/// Implements a saga persister for Rebus that stores sagas using an AdoNet provider.
 	/// </summary>
-	public class AdoNetSagaPersister : AdoNetStorage, IStoreSagaData, AdoNetSagaPersisterFluentConfigurer
+	public class AdoNetSagaPersister : /*AdoNetStorage,*/ IStoreSagaData, AdoNetSagaPersisterFluentConfigurer
 	{
 		private const int MaximumSagaDataTypeNameLength = 40;
 		private const string SAGA_ID_COLUMN = "id";
@@ -34,9 +31,10 @@ namespace Rebus.AdoNet
 			DateFormatHandling = DateFormatHandling.IsoDateFormat, // TODO: Make it configurable..
 		};
 
-		private string sagaIndexTableName;
-		private string sagaTableName;
-		private string idPropertyName;
+		private readonly AdoNetConnectionFactory factory;
+		private readonly string sagaIndexTableName;
+		private readonly string sagaTableName;
+		private readonly string idPropertyName;
 		private bool indexNullProperties = true;
 		private Func<Type, string> sagaNameCustomizer = null;
 
@@ -49,38 +47,35 @@ namespace Rebus.AdoNet
 		/// Constructs the persister with the ability to create connections to database using the specified connection string.
 		/// This also means that the persister will manage the connection by itself, closing it when it has stopped using it.
 		/// </summary>
-		public AdoNetSagaPersister(string connectionString, string providerName, string sagaTableName, string sagaIndexTableName)
-			: base(connectionString, providerName)
+		public AdoNetSagaPersister(AdoNetConnectionFactory factory, string sagaTableName, string sagaIndexTableName)
+		//	: base(connectionString, providerName)
 		{
-			Initialize(sagaTableName, sagaIndexTableName);
+			this.factory = factory;
+			this.sagaTableName = sagaTableName;
+			this.sagaIndexTableName = sagaIndexTableName;
+			this.idPropertyName = Reflect.Path<ISagaData>(x => x.Id);
 		}
 
-		/// <summary>
-		/// Constructs the persister with the ability to use an externally provided <see cref="IDbConnection"/>, thus allowing it
-		/// to easily enlist in any ongoing SQL transaction magic that might be going on. This means that the perister will assume
-		/// that someone else manages the connection's lifetime.
-		/// </summary>
-		public AdoNetSagaPersister(Func<ConnectionHolder> connectionFactoryMethod, string sagaTableName, string sagaIndexTableName)
-			: base(connectionFactoryMethod)
+		#region Connection Handling
+
+		protected readonly DbProviderFactory _factory;
+
+		private AdoNetUnitOfWorkScope GetUnitOfWorkScope(bool autocomplete = false)
 		{
-			Initialize(sagaTableName, sagaIndexTableName);
+			var uow = AdoNetUnitOfWorkManager.GetCurrent();
+
+#if false
+			if (!isolated && uow == null)
+			{
+				throw new InvalidOperationException("An non-isolated connection scope was requested, but no UnitOfWork was avaialble?!");
+			}
+#endif
+			uow = uow ?? new AdoNetUnitOfWork(factory, true);
+
+			return uow.GetScope();
 		}
 
-		/// <summary>
-		/// Returns the name of the table used to store correlation properties of saga instances
-		/// </summary>
-		public string SagaIndexTableName
-		{
-			get { return sagaIndexTableName; }
-		}
-
-		/// <summary>
-		/// Returns the name of the table used to store JSON serializations of saga instances.
-		/// </summary>
-		public string SagaTableName
-		{
-			get { return sagaTableName; }
-		}
+		#endregion
 
 		/// <summary>
 		/// Configures the persister to ignore null-valued correlation properties and not add them to the saga index.
@@ -98,27 +93,27 @@ namespace Rebus.AdoNet
 		/// </summary>
 		public AdoNetSagaPersisterFluentConfigurer EnsureTablesAreCreated()
 		{
-			var connection = getConnection();
-			try
+			using (var scope = GetUnitOfWorkScope())
 			{
-				var tableNames = connection.GetTableNames();
+				var dialect = scope.Dialect;
+				var connection = scope.Connection;
+				var tableNames = scope.GetTableNames();
 
 				// bail out if there's already a table in the database with one of the names
-				if (tableNames.Contains(SagaTableName, StringComparer.InvariantCultureIgnoreCase)
-					|| tableNames.Contains(SagaIndexTableName, StringComparer.OrdinalIgnoreCase))
+				if (tableNames.Contains(sagaTableName, StringComparer.InvariantCultureIgnoreCase)
+					|| tableNames.Contains(sagaIndexTableName, StringComparer.OrdinalIgnoreCase))
 				{
 					return this;
 				}
 
-				log.Info("Tables '{0}' and '{1}' do not exist - they will be created now",
-						 SagaTableName, SagaIndexTableName);
+				log.Info("Tables '{0}' and '{1}' do not exist - they will be created now", sagaTableName, sagaIndexTableName);
 
 				using (var command = connection.CreateCommand())
 				{
-					command.CommandText = connection.Dialect.FormatCreateTable(
+					command.CommandText = scope.Dialect.FormatCreateTable(
 						new AdoNetTable()
 						{
-							Name = SagaTableName,
+							Name = sagaTableName,
 							Columns = new []
 							{
 								new AdoNetColumn() { Name = SAGA_ID_COLUMN, DbType = DbType.Guid },
@@ -133,10 +128,10 @@ namespace Rebus.AdoNet
 
 				using (var command = connection.CreateCommand())
 				{
-					command.CommandText = connection.Dialect.FormatCreateTable(
+					command.CommandText = scope.Dialect.FormatCreateTable(
 						new AdoNetTable()
 						{
-							Name = SagaIndexTableName,
+							Name = sagaIndexTableName,
 							Columns = new []
 							{
 								new AdoNetColumn() { Name = SAGAINDEX_TYPE_COLUMN, DbType = DbType.StringFixedLength, Length = 40 },
@@ -154,12 +149,9 @@ namespace Rebus.AdoNet
 					command.ExecuteNonQuery();
 				}
 
-				commitAction(connection);
+				scope.Complete();
 			}
-			finally
-			{
-				releaseConnection(connection);
-			}
+
 			return this;
 		}
 
@@ -176,10 +168,12 @@ namespace Rebus.AdoNet
 
 		public void Insert(ISagaData sagaData, string[] sagaDataPropertyPathsToIndex)
 		{
-			var connection = getConnection();
-			var dialect = connection.Dialect;
-			try
+			using (var scope = GetUnitOfWorkScope())
 			{
+				var dialect = scope.Dialect;
+				var connection = scope.Connection;
+				var tableNames = scope.GetTableNames();
+
 				// next insert the saga
 				using (var command = connection.CreateCommand())
 				{
@@ -212,24 +206,21 @@ namespace Rebus.AdoNet
 
 				if (propertiesToIndex.Any())
 				{
-					CreateIndex(sagaData, connection, propertiesToIndex);
+					CreateIndex(sagaData, scope, propertiesToIndex);
 				}
 
-				commitAction(connection);
-			}
-			finally
-			{
-				releaseConnection(connection);
+				scope.Complete();
 			}
 		}
 
 		public void Update(ISagaData sagaData, string[] sagaDataPropertyPathsToIndex)
 		{
-			var connection = getConnection();
-			var dialect = connection.Dialect;
-
-			try
+			using (var scope = GetUnitOfWorkScope())
 			{
+				var dialect = scope.Dialect;
+				var connection = scope.Connection;
+				var tableNames = scope.GetTableNames();
+
 				// first, delete existing index
 				using (var command = connection.CreateCommand())
 				{
@@ -271,20 +262,18 @@ namespace Rebus.AdoNet
 
 				if (propertiesToIndex.Any())
 				{
-					CreateIndex(sagaData, connection, propertiesToIndex);
+					CreateIndex(sagaData, scope, propertiesToIndex);
 				}
 
-				commitAction(connection);
-			}
-			finally
-			{
-				releaseConnection(connection);
+				scope.Complete();
 			}
 		}
 
-		private void CreateIndex(ISagaData sagaData, ConnectionHolder connection, IEnumerable<KeyValuePair<string, string>> propertiesToIndex)
+		private void CreateIndex(ISagaData sagaData, AdoNetUnitOfWorkScope scope, IEnumerable<KeyValuePair<string, string>> propertiesToIndex)
 		{
-			var dialect = connection.Dialect;
+			var dialect = scope.Dialect;
+			var connection = scope.Connection;
+
 			var sagaTypeName = GetSagaTypeName(sagaData.GetType());
 			var parameters = propertiesToIndex
 				.Select((p, i) => new
@@ -340,11 +329,11 @@ namespace Rebus.AdoNet
 
 		public void Delete(ISagaData sagaData)
 		{
-			var connection = getConnection();
-			var dialect = connection.Dialect;
-
-			try
+			using (var scope = GetUnitOfWorkScope())
 			{
+				var dialect = scope.Dialect;
+				var connection = scope.Connection;
+
 				using (var command = connection.CreateCommand())
 				{
 					command.CommandText = string.Format(
@@ -367,7 +356,7 @@ namespace Rebus.AdoNet
 				using (var command = connection.CreateCommand())
 				{
 					command.CommandText = string.Format(
-						@"DELETE FROM {0} WHERE {1} = {2};", 
+						@"DELETE FROM {0} WHERE {1} = {2};",
 						dialect.QuoteForTableName(sagaIndexTableName),
 						dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN), dialect.EscapeParameter(SAGA_ID_COLUMN)
 					);
@@ -375,21 +364,17 @@ namespace Rebus.AdoNet
 					command.ExecuteNonQuery();
 				}
 
-				commitAction(connection);
-			}
-			finally
-			{
-				releaseConnection(connection);
+				scope.Complete();
 			}
 		}
 
 		public TSagaData Find<TSagaData>(string sagaDataPropertyPath, object fieldFromMessage) where TSagaData : class, ISagaData
 		{
-			var connection = getConnection();
-			var dialect = connection.Dialect;
-
-			try
+			using (var scope = GetUnitOfWorkScope(autocomplete: true))
 			{
+				var dialect = scope.Dialect;
+				var connection = scope.Connection;
+
 				using (var command = connection.CreateCommand())
 				{
 					if (sagaDataPropertyPath == idPropertyName)
@@ -443,17 +428,6 @@ namespace Rebus.AdoNet
 					}
 				}
 			}
-			finally
-			{
-				releaseConnection(connection);
-			}
-		}
-
-		private void Initialize(string sagaTableName, string sagaIndexTableName)
-		{
-			this.sagaTableName = sagaTableName;
-			this.sagaIndexTableName = sagaIndexTableName;
-			this.idPropertyName = Reflect.Path<ISagaData>(x => x.Id);
 		}
 
 		List<KeyValuePair<string, string>> GetPropertiesToIndex(ISagaData sagaData, IEnumerable<string> sagaDataPropertyPathsToIndex)

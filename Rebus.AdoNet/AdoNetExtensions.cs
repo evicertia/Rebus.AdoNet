@@ -36,7 +36,10 @@ namespace Rebus.AdoNet
 		public static AdoNetSagaPersisterFluentConfigurer StoreInAdoNet(this RebusSagasConfigurer configurer, string connectionStringName, string sagaTable, string sagaIndexTable)
 		{
 			var connString = GetConnectionString(connectionStringName);
-			var persister = new AdoNetSagaPersister(connString.ConnectionString, connString.ProviderName, sagaTable, sagaIndexTable);
+			var factory = new AdoNetConnectionFactory(connString.ConnectionString, connString.ProviderName);
+
+			configurer.Backbone.ConfigureEvents(x => x.AddUnitOfWorkManager(new AdoNetUnitOfWorkManager(factory)));
+			var persister = new AdoNetSagaPersister(factory, sagaTable, sagaIndexTable);
 
 			configurer.Use(persister);
 

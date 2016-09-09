@@ -30,14 +30,12 @@ namespace Rebus.AdoNet
 		/// </summary>
 		public IDbTransaction Transaction { get; private set; }
 
-		public IUnitOfWork UnitOfWork { get; private set; }
-
 		/// <summary>
 		/// Initializes a new instance of the <see cref="ConnectionHolder"/> class.
 		/// </summary>
 		/// <param name="connection">The connection.</param>
 		/// <param name="transaction">The transaction.</param>
-		internal ConnectionHolder(IDbConnection connection, SqlDialect dialect, IDbTransaction transaction, IUnitOfWork unitOfWork = null)
+		internal ConnectionHolder(IDbConnection connection, SqlDialect dialect, IDbTransaction transaction)
 		{
 			if (connection == null) throw new ArgumentNullException(nameof(connection));
 			if (dialect == null) throw new ArgumentNullException(nameof(dialect));
@@ -45,7 +43,6 @@ namespace Rebus.AdoNet
 			Connection = connection;
 			Dialect = dialect;
 			Transaction = transaction;
-			UnitOfWork = unitOfWork;
 		}
 
 		/// <summary>
@@ -71,13 +68,6 @@ namespace Rebus.AdoNet
 			if (transaction == null) throw new ArgumentNullException(nameof(transaction));
 
 			return new ConnectionHolder(connection, dialect, transaction);
-		}
-
-		internal static ConnectionHolder ForUnitOfWork(AdoNetUnitOfWork unitOfWork, SqlDialect dialect)
-		{
-			if (unitOfWork == null) throw new ArgumentNullException(nameof(unitOfWork));
-
-			return new ConnectionHolder(unitOfWork.Connection, dialect, null, unitOfWork: unitOfWork);
 		}
 
 		/// <summary>
@@ -113,9 +103,8 @@ namespace Rebus.AdoNet
 		/// </summary>
 		public void Commit()
 		{
-			if (Transaction == null) return;
-
-			Transaction.Commit();
+			if (Transaction != null)
+				Transaction.Commit();
 		}
 
 		/// <summary>

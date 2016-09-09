@@ -460,6 +460,14 @@ namespace Rebus.AdoNet.Dialects
 			return GetAllDialects().FirstOrDefault(x => x.SupportsThisDialect(connection));
 		}
 
+		public static SqlDialect GetDialectFor(DbProviderFactory provider, string connectionString)
+		{
+			using (var connection = provider.OpenConnection(connectionString))
+			{
+				return GetDialectFor(connection);
+			}
+		}
+
 		#endregion
 	}
 }
