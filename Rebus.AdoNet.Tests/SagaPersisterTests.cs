@@ -103,6 +103,7 @@ namespace Rebus.AdoNet
 		private static readonly ILog _Log = LogManager.GetLogger<SagaPersisterTests>();
 
 		private AdoNetConnectionFactory _factory;
+		private AdoNetUnitOfWorkManager _manager;
 		private const string SagaTableName = "Sagas";
 		private const string SagaIndexTableName = "SagasIndex";
 
@@ -168,7 +169,7 @@ namespace Rebus.AdoNet
 
 		protected AdoNetSagaPersister CreatePersister(bool createTables = false)
 		{
-			var result = new AdoNetSagaPersister(_factory, SagaTableName, SagaIndexTableName);
+			var result = new AdoNetSagaPersister(_manager, SagaTableName, SagaIndexTableName);
 			if (createTables) result.EnsureTablesAreCreated();
 			return result;
 		}
@@ -177,6 +178,7 @@ namespace Rebus.AdoNet
 		public void OneTimeSetup()
 		{
 			_factory = new AdoNetConnectionFactory(ConnectionString, ProviderName);
+			_manager = new AdoNetUnitOfWorkManager(_factory);
 		}
 
 
@@ -702,7 +704,7 @@ namespace Rebus.AdoNet
 			var sagaId1 = Guid.NewGuid();
 			var sagaId2 = Guid.NewGuid();
 
-			using (var uow = new AdoNetUnitOfWorkManager(_factory).Create())
+			using (var uow = _manager.Create())
 			{
 				persister.Insert(new SimpleSagaData { Id = sagaId1, SomeString = "FirstSaga" }, new[] { "Id" });
 				persister.Insert(new MySagaData { Id = sagaId2, AnotherField = "SecondSaga" }, new[] { "Id" });
@@ -727,7 +729,7 @@ namespace Rebus.AdoNet
 			var sagaId1 = Guid.NewGuid();
 			var sagaId2 = Guid.NewGuid();
 
-			using (var uow = new AdoNetUnitOfWorkManager(_factory).Create())
+			using (var uow = _manager.Create())
 			{
 				persister.Insert(new SimpleSagaData { Id = sagaId1, SomeString = "FirstSaga" }, new[] { "Id" });
 				persister.Insert(new MySagaData { Id = sagaId2, AnotherField = "SecondSaga" }, new[] { "Id" });

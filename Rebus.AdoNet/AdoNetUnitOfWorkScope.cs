@@ -13,12 +13,16 @@ namespace Rebus.AdoNet
 		private static ILog _log;
 		private bool _completed = false;
 		private readonly AdoNetUnitOfWork _unitOfWork;
-		private readonly Action _onDispose;
 
 		/// <summary>
 		/// Gets the SQL dialect of the current connection.
 		/// </summary>
 		public SqlDialect Dialect { get; private set; }
+
+		/// <summary>
+		/// Occurs when [on dispose].
+		/// </summary>
+		public event Action OnDispose = delegate { };
 
 		/// <summary>
 		/// Gets the current open connection to the database
@@ -31,14 +35,13 @@ namespace Rebus.AdoNet
 			RebusLoggerFactory.Changed += f => _log = f.GetCurrentClassLogger();
 		}
 
-		public AdoNetUnitOfWorkScope(AdoNetUnitOfWork unitOfWork, SqlDialect dialect, IDbConnection connection, Action onDispose = null)
+		public AdoNetUnitOfWorkScope(AdoNetUnitOfWork unitOfWork, SqlDialect dialect, IDbConnection connection)
 		{
 			if (unitOfWork == null) throw new ArgumentNullException(nameof(unitOfWork));
 
 			_unitOfWork = unitOfWork;
 			Dialect = dialect;
 			Connection = connection;
-			_onDispose = onDispose;
 
 			_log.Debug("Created new instance: {0} (UnitOfWork: {1})", GetHashCode(), unitOfWork.GetHashCode());
 		}
@@ -73,7 +76,7 @@ namespace Rebus.AdoNet
 					_unitOfWork.Abort();
 				}
 
-				_onDispose?.Invoke();
+				OnDispose();
 
 				_log.Debug("Disposed instance: {0}...", GetHashCode());
 			}

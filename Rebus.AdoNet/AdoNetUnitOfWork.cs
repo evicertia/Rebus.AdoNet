@@ -15,10 +15,17 @@ namespace Rebus.AdoNet
 	{
 		private static ILog _log;
 		private readonly AdoNetConnectionFactory _factory;
-		private IDbConnection _connection;
-		private IDbTransaction _transaction;
+		private Lazy<Tuple<IDbConnection, IDbTransaction>> __connection;
 		private bool _aborted;
 		private bool _autodispose;
+
+		private IDbConnection Connection => __connection?.Value.Item1;
+		private IDbTransaction Transaction => __connection?.Value.Item2;
+
+		/// <summary>
+		/// Occurs when [on dispose].
+		/// </summary>
+		public event Action OnDispose = delegate { };
 
 		static AdoNetUnitOfWork()
 		{
@@ -26,45 +33,55 @@ namespace Rebus.AdoNet
 
 		}
 
-		public AdoNetUnitOfWork(AdoNetConnectionFactory factory, bool autodispose)
+		public AdoNetUnitOfWork(AdoNetConnectionFactory factory, IMessageContext context)
 		{
 			if (factory == null) throw new ArgumentNullException(nameof(factory));
 
 			_factory = factory;
-			_connection = factory.OpenConnection();
-			_transaction = _connection.BeginTransaction(IsolationLevel.ReadCommitted); //< We may require 'Serializable' as our default.
-			_autodispose = autodispose;
+			_autodispose = context == null;
+			__connection = new Lazy<Tuple<IDbConnection, IDbTransaction>>(() => {
+				var connection = factory.OpenConnection();
+				var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted); //< We may require 'Serializable' as our default.
+				_log.Debug("Created new connection {0} and transaction {1}", connection.GetHashCode(), transaction.GetHashCode());
+				return Tuple.Create(connection, transaction);
+			});
 
-			_log.Debug("Created new instance with connection {0} and transaction {1}", _connection.GetHashCode(), _transaction.GetHashCode());
+			_log.Debug("Created new instance for context: {0}", context?.GetHashCode());
 		}
 
 		public AdoNetUnitOfWorkScope GetScope()
 		{
-			return new AdoNetUnitOfWorkScope(this, _factory.Dialect, _connection, onDispose: !_autodispose ? (Action)null :
-				() =>
-				{
-					if (!_aborted) Commit();
-					this.Dispose();
-				});
+			var result = new AdoNetUnitOfWorkScope(this, _factory.Dialect, Connection);
+
+			if (_autodispose) {
+				result.OnDispose +=
+					() =>
+					{
+						if (!_aborted) Commit();
+						this.Dispose();
+					};
+			}
+
+			return result;
 		}
 
 		public void Abort()
 		{
-			if (_transaction == null) throw new InvalidOperationException("UnitOfWork has no active transaction?!");
+			if (Transaction == null) throw new InvalidOperationException("UnitOfWork has no active transaction?!");
 
-			_log.Debug("Rolling back transaction: {0}...", _transaction.GetHashCode());
-			_transaction.Rollback();
+			_log.Debug("Rolling back transaction: {0}...", Transaction.GetHashCode());
+			Transaction.Rollback();
 			_aborted = true;
-			_log.Debug("Rolled back transaction: {0}...", _transaction.GetHashCode());
+			_log.Debug("Rolled back transaction: {0}...", Transaction.GetHashCode());
 		}
 
 		public void Commit()
 		{
-			if (_transaction == null) throw new InvalidOperationException("UnitOfWork has no active transaction?!");
+			if (Transaction == null) throw new InvalidOperationException("UnitOfWork has no active transaction?!");
 
-			_log.Debug("Committing transaction: {0}...", _transaction.GetHashCode());
-			_transaction.Commit();
-			_log.Debug("Committed transaction: {0}...", _transaction.GetHashCode());
+			_log.Debug("Committing transaction: {0}...", Transaction.GetHashCode());
+			Transaction.Commit();
+			_log.Debug("Committed transaction: {0}...", Transaction.GetHashCode());
 		}
 
 		#region IDisposable
@@ -76,22 +93,29 @@ namespace Rebus.AdoNet
 
 			if (disposing)
 			{
-				// dispose managed state (managed objects implemeting IDisposable).
-				if (_transaction != null)
+				if (__connection.IsValueCreated)
 				{
-					_log.Debug("Disposing transaction: {0}...", _transaction.GetHashCode());
-					_transaction.Dispose();
-					_log.Debug("Disposed transaction: {0}...", _transaction.GetHashCode());
-					_transaction = null;
+					// dispose managed state (managed objects implemeting IDisposable).
+					if (Transaction != null)
+					{
+						_log.Debug("Disposing transaction: {0}...", Transaction.GetHashCode());
+						Transaction.Dispose();
+						_log.Debug("Disposed transaction: {0}...", Transaction.GetHashCode());
+						//_transaction = null;
+					}
+
+					if (Connection != null)
+					{
+						_log.Debug("Disposing connection: {0}...", Connection.GetHashCode());
+						Connection.Dispose();
+						_log.Debug("Disposed connection: {0}...", Connection.GetHashCode());
+						//_connection = null;
+					}
 				}
 
-				if (_connection != null)
-				{
-					_log.Debug("Disposing connection: {0}...", _connection.GetHashCode());
-					_connection.Dispose();
-					_log.Debug("Disposed connection: {0}...", _connection.GetHashCode());
-					_connection = null;
-				}
+				__connection = null;
+
+				OnDispose();
 			}
 
 			// XXX: Never throw exceptions from this point forward, log them instead.

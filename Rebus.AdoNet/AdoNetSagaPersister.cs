@@ -15,7 +15,7 @@ namespace Rebus.AdoNet
 	/// <summary>
 	/// Implements a saga persister for Rebus that stores sagas using an AdoNet provider.
 	/// </summary>
-	public class AdoNetSagaPersister : /*AdoNetStorage,*/ IStoreSagaData, AdoNetSagaPersisterFluentConfigurer
+	public class AdoNetSagaPersister : IStoreSagaData, AdoNetSagaPersisterFluentConfigurer
 	{
 		private const int MaximumSagaDataTypeNameLength = 40;
 		private const string SAGA_ID_COLUMN = "id";
@@ -31,7 +31,7 @@ namespace Rebus.AdoNet
 			DateFormatHandling = DateFormatHandling.IsoDateFormat, // TODO: Make it configurable..
 		};
 
-		private readonly AdoNetConnectionFactory factory;
+		private readonly AdoNetUnitOfWorkManager manager;
 		private readonly string sagaIndexTableName;
 		private readonly string sagaTableName;
 		private readonly string idPropertyName;
@@ -47,35 +47,13 @@ namespace Rebus.AdoNet
 		/// Constructs the persister with the ability to create connections to database using the specified connection string.
 		/// This also means that the persister will manage the connection by itself, closing it when it has stopped using it.
 		/// </summary>
-		public AdoNetSagaPersister(AdoNetConnectionFactory factory, string sagaTableName, string sagaIndexTableName)
-		//	: base(connectionString, providerName)
+		public AdoNetSagaPersister(AdoNetUnitOfWorkManager manager, string sagaTableName, string sagaIndexTableName)
 		{
-			this.factory = factory;
+			this.manager = manager;
 			this.sagaTableName = sagaTableName;
 			this.sagaIndexTableName = sagaIndexTableName;
 			this.idPropertyName = Reflect.Path<ISagaData>(x => x.Id);
 		}
-
-		#region Connection Handling
-
-		protected readonly DbProviderFactory _factory;
-
-		private AdoNetUnitOfWorkScope GetUnitOfWorkScope(bool autocomplete = false)
-		{
-			var uow = AdoNetUnitOfWorkManager.GetCurrent();
-
-#if false
-			if (!isolated && uow == null)
-			{
-				throw new InvalidOperationException("An non-isolated connection scope was requested, but no UnitOfWork was avaialble?!");
-			}
-#endif
-			uow = uow ?? new AdoNetUnitOfWork(factory, true);
-
-			return uow.GetScope();
-		}
-
-		#endregion
 
 		/// <summary>
 		/// Configures the persister to ignore null-valued correlation properties and not add them to the saga index.
@@ -93,7 +71,7 @@ namespace Rebus.AdoNet
 		/// </summary>
 		public AdoNetSagaPersisterFluentConfigurer EnsureTablesAreCreated()
 		{
-			using (var scope = GetUnitOfWorkScope())
+			using (var scope = manager.GetScope(autonomous: true))
 			{
 				var dialect = scope.Dialect;
 				var connection = scope.Connection;
@@ -168,7 +146,7 @@ namespace Rebus.AdoNet
 
 		public void Insert(ISagaData sagaData, string[] sagaDataPropertyPathsToIndex)
 		{
-			using (var scope = GetUnitOfWorkScope())
+			using (var scope = manager.GetScope())
 			{
 				var dialect = scope.Dialect;
 				var connection = scope.Connection;
@@ -215,7 +193,7 @@ namespace Rebus.AdoNet
 
 		public void Update(ISagaData sagaData, string[] sagaDataPropertyPathsToIndex)
 		{
-			using (var scope = GetUnitOfWorkScope())
+			using (var scope = manager.GetScope())
 			{
 				var dialect = scope.Dialect;
 				var connection = scope.Connection;
@@ -329,7 +307,7 @@ namespace Rebus.AdoNet
 
 		public void Delete(ISagaData sagaData)
 		{
-			using (var scope = GetUnitOfWorkScope())
+			using (var scope = manager.GetScope())
 			{
 				var dialect = scope.Dialect;
 				var connection = scope.Connection;
@@ -370,7 +348,7 @@ namespace Rebus.AdoNet
 
 		public TSagaData Find<TSagaData>(string sagaDataPropertyPath, object fieldFromMessage) where TSagaData : class, ISagaData
 		{
-			using (var scope = GetUnitOfWorkScope(autocomplete: true))
+			using (var scope = manager.GetScope(autocomplete: true))
 			{
 				var dialect = scope.Dialect;
 				var connection = scope.Connection;
