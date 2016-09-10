@@ -13,10 +13,11 @@ namespace Rebus.AdoNet
 	/// <summary>
 	/// Implements a timeout storage for Rebus that stores sagas in AdoNet.
 	/// </summary>
-	public class AdoNetTimeoutStorage : AdoNetStorage, IStoreTimeouts, AdoNetTimeoutStorageFluentConfigurer
+	public class AdoNetTimeoutStorage : IStoreTimeouts, AdoNetTimeoutStorageFluentConfigurer
 	{
 		static ILog log;
 
+		readonly AdoNetConnectionFactory factory;
 		readonly string timeoutsTableName;
 
 		static AdoNetTimeoutStorage()
@@ -28,9 +29,9 @@ namespace Rebus.AdoNet
 		/// Constructs the timeout storage which will use the specified connection string to connect to a database,
 		/// storing the timeouts in the table with the specified name
 		/// </summary>
-		public AdoNetTimeoutStorage(string connectionString, string providerName, string timeoutsTableName)
-			: base(connectionString, providerName)
+		public AdoNetTimeoutStorage(AdoNetConnectionFactory factory, string timeoutsTableName)
 		{
+			this.factory = factory;
 			this.timeoutsTableName = timeoutsTableName;
 		}
 
@@ -47,13 +48,10 @@ namespace Rebus.AdoNet
 		/// </summary>
 		public void Add(Timeout.Timeout newTimeout)
 		{
-			var connection = getConnection();
-
-			try
+			using (var connection = factory.OpenConnection())
+			using (var command = connection.CreateCommand())
 			{
-				using (var command = connection.CreateCommand())
-				{
-					var parameters = new Dictionary<string, object>
+				var parameters = new Dictionary<string, object>
 					{
 						{ "time_to_return", newTimeout.TimeToReturn },
 						{ "correlation_id", newTimeout.CorrelationId },
@@ -61,31 +59,24 @@ namespace Rebus.AdoNet
 						{ "reply_to", newTimeout.ReplyTo }
 					};
 
-					if (newTimeout.CustomData != null)
-					{
-						parameters.Add("custom_data", newTimeout.CustomData);
-					}
-
-					foreach (var parameter in parameters)
-					{
-						command.AddParameter(parameter.Key, parameter.Value);
-					}
-
-					const string sql = @"INSERT INTO ""{0}"" ({1}) VALUES ({2})";
-
-					var valueNames = string.Join(", ", parameters.Keys.Select(x => "\"" + x + "\""));
-					var parameterNames = string.Join(", ", parameters.Keys.Select(x => "@" + x));
-
-					command.CommandText = string.Format(sql, timeoutsTableName, valueNames, parameterNames);
-
-					command.ExecuteNonQuery();
+				if (newTimeout.CustomData != null)
+				{
+					parameters.Add("custom_data", newTimeout.CustomData);
 				}
 
-				commitAction(connection);
-			}
-			finally
-			{
-				releaseConnection(connection);
+				foreach (var parameter in parameters)
+				{
+					command.AddParameter(parameter.Key, parameter.Value);
+				}
+
+				const string sql = @"INSERT INTO ""{0}"" ({1}) VALUES ({2})";
+
+				var valueNames = string.Join(", ", parameters.Keys.Select(x => "\"" + x + "\""));
+				var parameterNames = string.Join(", ", parameters.Keys.Select(x => "@" + x));
+
+				command.CommandText = string.Format(sql, timeoutsTableName, valueNames, parameterNames);
+
+				command.ExecuteNonQuery();
 			}
 		}
 
@@ -95,39 +86,30 @@ namespace Rebus.AdoNet
 		public DueTimeoutsResult GetDueTimeouts()
 		{
 			var dueTimeouts = new List<DueTimeout>();
-			var connection = getConnection();
 
-			try
+			using (var connection = factory.OpenConnection())
+			using (var command = connection.CreateCommand())
 			{
-				using (var command = connection.CreateCommand())
-				{
-					const string sql = @"
+				const string sql = @"
 SELECT ""id"", ""time_to_return"", ""correlation_id"", ""saga_id"", ""reply_to"", ""custom_data""
 FROM ""{0}""
 WHERE ""time_to_return"" <= @current_time
 ORDER BY ""time_to_return"" ASC
 ";
 
-					command.CommandText = string.Format(sql, timeoutsTableName);
+				command.CommandText = string.Format(sql, timeoutsTableName);
 
-					command.AddParameter("current_time", RebusTimeMachine.Now());
+				command.AddParameter("current_time", RebusTimeMachine.Now());
 
-					using (var reader = command.ExecuteReader())
+				using (var reader = command.ExecuteReader())
+				{
+					while (reader.Read())
 					{
-						while (reader.Read())
-						{
-							var sqlTimeout = DueAdoNetTimeout.Create(MarkAsProcessed, timeoutsTableName, reader);
+						var sqlTimeout = DueAdoNetTimeout.Create(MarkAsProcessed, timeoutsTableName, reader);
 
-							dueTimeouts.Add(sqlTimeout);
-						}
+						dueTimeouts.Add(sqlTimeout);
 					}
 				}
-
-				connection.Commit();
-			}
-			finally
-			{
-				releaseConnection(connection);
 			}
 
 			return new DueTimeoutsResult(dueTimeouts);
@@ -135,24 +117,13 @@ ORDER BY ""time_to_return"" ASC
 
 		void MarkAsProcessed(DueAdoNetTimeout dueTimeout)
 		{
-			var connection = getConnection();
-
-			try
+			using (var connection = factory.OpenConnection())
+			using (var command = connection.CreateCommand())
 			{
-				using (var command = connection.CreateCommand())
-				{
-					command.CommandText = string.Format(@"DELETE FROM ""{0}"" WHERE ""id"" = @id", timeoutsTableName);
+				command.CommandText = string.Format(@"DELETE FROM ""{0}"" WHERE ""id"" = @id", timeoutsTableName);
+				command.AddParameter("id", dueTimeout.Id);
 
-					command.AddParameter("id", dueTimeout.Id);
-
-					command.ExecuteNonQuery();
-				}
-
-				connection.Commit();
-			}
-			finally
-			{
-				releaseConnection(connection);
+				command.ExecuteNonQuery();
 			}
 		}
 
@@ -163,12 +134,9 @@ ORDER BY ""time_to_return"" ASC
 		/// </summary>
 		public AdoNetTimeoutStorageFluentConfigurer EnsureTableIsCreated()
 		{
-			var connection = getConnection();
-			var dialect = connection.Dialect;
-
-			try
+			using (var connection = factory.OpenConnection())
 			{
-				var tableNames = connection.GetTableNames();
+				var tableNames = factory.Dialect.GetTableNames(connection);
 
 				if (tableNames.Contains(timeoutsTableName, StringComparer.OrdinalIgnoreCase))
 				{
@@ -179,8 +147,9 @@ ORDER BY ""time_to_return"" ASC
 
 				using (var command = connection.CreateCommand())
 				{
-					command.CommandText = dialect.FormatCreateTable(
-						new AdoNetTable() {
+					command.CommandText = factory.Dialect.FormatCreateTable(
+						new AdoNetTable()
+						{
 							Name = timeoutsTableName,
 							Columns = new[]
 							{
@@ -202,12 +171,8 @@ ORDER BY ""time_to_return"" ASC
 					command.ExecuteNonQuery();
 				}
 
-				commitAction(connection);
 			}
-			finally
-			{
-				releaseConnection(connection);
-			}
+
 			return this;
 		}
 

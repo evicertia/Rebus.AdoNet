@@ -12,26 +12,21 @@ namespace Rebus.AdoNet
 	/// <summary>
 	/// Implements a subscription storage for Rebus that stores sagas in AdoNet.
 	/// </summary>
-	public class AdoNetSubscriptionStorage : AdoNetStorage, IStoreSubscriptions, AdoNetSubscriptionStorageFluentConfigurer
+	public class AdoNetSubscriptionStorage : IStoreSubscriptions, AdoNetSubscriptionStorageFluentConfigurer
 	{
 		static ILog log;
 
 		readonly string subscriptionsTableName;
+		readonly AdoNetConnectionFactory factory;
 
 		static AdoNetSubscriptionStorage()
 		{
 			RebusLoggerFactory.Changed += f => log = f.GetCurrentClassLogger();
 		}
 
-		public AdoNetSubscriptionStorage(Func<ConnectionHolder> connectionFactoryMethod, string subscriptionsTableName)
-			: base(connectionFactoryMethod)
+		public AdoNetSubscriptionStorage(AdoNetConnectionFactory factory, string subscriptionsTableName)
 		{
-			this.subscriptionsTableName = subscriptionsTableName;
-		}
-
-		public AdoNetSubscriptionStorage(string connectionString, string providerName, string subscriptionsTableName)
-			: base(connectionString, providerName)
-		{
+			this.factory = factory;
 			this.subscriptionsTableName = subscriptionsTableName;
 		}
 
@@ -45,34 +40,26 @@ namespace Rebus.AdoNet
 		/// </summary>
 		public void Store(Type eventType, string subscriberInputQueue)
 		{
-			var connection = getConnection();
-			try
+
+			using (var connection = factory.OpenConnection())
+			using (var command = connection.CreateCommand())
 			{
-				using (var command = connection.CreateCommand())
+				const string Sql = @"insert into ""{0}"" (""message_type"", ""endpoint"") values (@message_type, @endpoint)";
+
+				command.CommandText = string.Format(Sql, subscriptionsTableName);
+
+				command.AddParameter("message_type", eventType.FullName);
+				command.AddParameter("endpoint", subscriberInputQueue);
+
+				try
 				{
-					const string Sql = @"insert into ""{0}"" (""message_type"", ""endpoint"") values (@message_type, @endpoint)";
-
-					command.CommandText = string.Format(Sql, subscriptionsTableName);
-
-					command.AddParameter("message_type", eventType.FullName);
-					command.AddParameter("endpoint", subscriberInputQueue);
-
-					try
-					{
-						command.ExecuteNonQuery();
-					}
-					catch (DbException ex)
-					{
-						if (!AdoNetExceptionManager.IsDuplicatedKeyException(ex))
-							throw;
-					}
+					command.ExecuteNonQuery();
 				}
-
-				commitAction(connection);
-			}
-			finally
-			{
-				releaseConnection(connection);
+				catch (DbException ex)
+				{
+					if (!AdoNetExceptionManager.IsDuplicatedKeyException(ex))
+						throw;
+				}
 			}
 		}
 
@@ -83,24 +70,15 @@ namespace Rebus.AdoNet
 		{
 			const string Sql = @"delete from ""{0}"" where ""message_type"" = @message_type and ""endpoint"" = @endpoint";
 
-			var connection = getConnection();
-			try
+			using (var connection = factory.OpenConnection())
+			using (var command = connection.CreateCommand())
 			{
-				using (var command = connection.CreateCommand())
-				{
-					command.CommandText = string.Format(Sql, subscriptionsTableName);
+				command.CommandText = string.Format(Sql, subscriptionsTableName);
 
-					command.AddParameter("message_type", eventType.FullName);
-					command.AddParameter("endpoint", subscriberInputQueue);
+				command.AddParameter("message_type", eventType.FullName);
+				command.AddParameter("endpoint", subscriberInputQueue);
 
-					command.ExecuteNonQuery();
-				}
-
-				commitAction(connection);
-			}
-			finally
-			{
-				releaseConnection(connection);
+				command.ExecuteNonQuery();
 			}
 		}
 
@@ -109,33 +87,26 @@ namespace Rebus.AdoNet
 		/// </summary>
 		public string[] GetSubscribers(Type eventType)
 		{
-			var connection = getConnection();
-			try
+			using (var connection = factory.OpenConnection())
+			using (var command = connection.CreateCommand())
 			{
-				using (var command = connection.CreateCommand())
+				const string Sql = @"select ""endpoint"" from ""{0}"" where ""message_type"" = @message_type";
+
+				command.CommandText = string.Format(Sql, subscriptionsTableName);
+
+				command.AddParameter("message_type", eventType.FullName);
+
+				var endpoints = new List<string>();
+
+				using (var reader = command.ExecuteReader())
 				{
-					const string Sql = @"select ""endpoint"" from ""{0}"" where ""message_type"" = @message_type";
-
-					command.CommandText = string.Format(Sql, subscriptionsTableName);
-
-					command.AddParameter("message_type", eventType.FullName);
-
-					var endpoints = new List<string>();
-
-					using (var reader = command.ExecuteReader())
+					while (reader.Read())
 					{
-						while (reader.Read())
-						{
-							endpoints.Add((string)reader["endpoint"]);
-						}
+						endpoints.Add((string)reader["endpoint"]);
 					}
-
-					return endpoints.ToArray();
 				}
-			}
-			finally
-			{
-				releaseConnection(connection);
+
+				return endpoints.ToArray();
 			}
 		}
 
@@ -146,10 +117,9 @@ namespace Rebus.AdoNet
 		/// </summary>
 		public AdoNetSubscriptionStorageFluentConfigurer EnsureTableIsCreated()
 		{
-			var connection = getConnection();
-			try
+			using (var connection = factory.OpenConnection())
 			{
-				var tableNames = connection.GetTableNames();
+				var tableNames = factory.Dialect.GetTableNames(connection);
 
 				if (tableNames.Contains(subscriptionsTableName, StringComparer.OrdinalIgnoreCase))
 				{
@@ -169,12 +139,6 @@ CREATE TABLE ""{0}"" (
 ", subscriptionsTableName);
 					command.ExecuteNonQuery();
 				}
-
-				commitAction(connection);
-			}
-			finally
-			{
-				releaseConnection(connection);
 			}
 
 			return this;

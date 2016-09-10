@@ -12,14 +12,21 @@ namespace Rebus.AdoNet
 		private static readonly ILog _Log = LogManager.GetLogger<SagaPersisterTests>();
 		private const string TIMEOUTS_TABLE = "timeouts";
 
+		private AdoNetConnectionFactory _factory;
 		private AdoNetTimeoutStorage _storage;
+
+		[OneTimeSetUp]
+		public void OneTimeSetup()
+		{
+			_factory = new AdoNetConnectionFactory(ConnectionString, ProviderName);
+		}
 
 		[SetUp]
 		public new void SetUp()
 		{
 			DropTable(TIMEOUTS_TABLE);
 
-			_storage = new AdoNetTimeoutStorage(ConnectionString, ProviderName, TIMEOUTS_TABLE);
+			_storage = new AdoNetTimeoutStorage(_factory, TIMEOUTS_TABLE);
 		}
 
 		[Test]

@@ -23,7 +23,8 @@ namespace Rebus.AdoNet
 		public static AdoNetSubscriptionStorageFluentConfigurer StoreInAdoNet(this RebusSubscriptionsConfigurer configurer, string connectionStringName, string subscriptionsTableName)
 		{
 			var connString = GetConnectionString(connectionStringName);
-			var storage = new AdoNetSubscriptionStorage(connString.ConnectionString, connString.ProviderName, subscriptionsTableName);
+			var factory = new AdoNetConnectionFactory(connString.ConnectionString, connString.ProviderName);
+			var storage = new AdoNetSubscriptionStorage(factory, subscriptionsTableName);
 
 			configurer.Use(storage);
 
@@ -53,7 +54,8 @@ namespace Rebus.AdoNet
 		public static AdoNetTimeoutStorageFluentConfigurer StoreInAdoNet(this RebusTimeoutsConfigurer configurer, string connectionStringName, string timeoutsTableName)
 		{
 			var connString = GetConnectionString(connectionStringName);
-			var storage = new AdoNetTimeoutStorage(connString.ConnectionString, connString.ProviderName, timeoutsTableName);
+			var factory = new AdoNetConnectionFactory(connString.ConnectionString, connString.ProviderName);
+			var storage = new AdoNetTimeoutStorage(factory, timeoutsTableName);
 
 			configurer.Use(storage);
 
