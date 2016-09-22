@@ -24,14 +24,17 @@ namespace Rebus.AdoNet
 			_factory = factory;
 		}
 
-		internal static AdoNetUnitOfWork GetCurrent()
+		internal static AdoNetUnitOfWork TryGetCurrent()
 		{
 			object result = null;
 			var context = MessageContext.HasCurrent ? MessageContext.GetCurrent() : null;
 
-			if ((bool)context?.Items.TryGetValue(CONTEXT_ITEM_KEY, out result))
+			if (context != null)
 			{
-				return (AdoNetUnitOfWork)result;
+				if (context.Items.TryGetValue(CONTEXT_ITEM_KEY, out result))
+				{
+					return (AdoNetUnitOfWork)result;
+				}
 			}
 
 			return null;
@@ -39,7 +42,7 @@ namespace Rebus.AdoNet
 
 		internal AdoNetUnitOfWorkScope GetScope(bool autonomous = true, bool autocomplete = false)
 		{
-			var uow = GetCurrent();
+			var uow = TryGetCurrent();
 			if (!autonomous && uow == null)
 			{
 				throw new InvalidOperationException("An scope was requested, but no UnitOfWork was avaialble?!");
