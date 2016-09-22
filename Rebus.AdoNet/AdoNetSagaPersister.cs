@@ -96,7 +96,7 @@ namespace Rebus.AdoNet
 							{
 								new AdoNetColumn() { Name = SAGA_ID_COLUMN, DbType = DbType.Guid },
 								new AdoNetColumn() { Name = SAGA_REVISION_COLUMN, DbType = DbType.Int32 },
-								new AdoNetColumn() { Name = SAGA_DATA_COLUMN, DbType = DbType.String }
+								new AdoNetColumn() { Name = SAGA_DATA_COLUMN, DbType = DbType.String, Length = 1073741823}
 							},
 							PrimaryKey = new[] { SAGA_ID_COLUMN }
 						}

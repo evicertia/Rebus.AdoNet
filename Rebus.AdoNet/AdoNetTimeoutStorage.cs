@@ -158,7 +158,7 @@ ORDER BY ""time_to_return"" ASC
 								new AdoNetColumn() { Name = "correlation_id", DbType = DbType.String, Length = 200 },
 								new AdoNetColumn() { Name = "saga_id", DbType = DbType.Guid },
 								new AdoNetColumn() { Name = "reply_to", DbType = DbType.String, Length = 200 },
-								new AdoNetColumn() { Name = "custom_data", DbType = DbType.String }
+								new AdoNetColumn() { Name = "custom_data", DbType = DbType.String, Length = 1073741823 }
 							},
 							PrimaryKey = new[] { "id" },
 							Indexes = new[]
