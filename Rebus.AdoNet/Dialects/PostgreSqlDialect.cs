@@ -75,7 +75,7 @@ namespace Rebus.AdoNet.Dialects
 			var result = identity ? GetIdentityTypeFor(type)
 				: base.GetColumnType(type, length, precision, scale, identity, primary);
 
-			return string.Format("{0} {1}", result, primary ? " PRIMARY KEY" : "");
+			return result;
 		}
 
 		#endregion

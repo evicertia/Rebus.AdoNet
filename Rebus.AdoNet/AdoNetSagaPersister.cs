@@ -15,7 +15,7 @@ namespace Rebus.AdoNet
 	/// <summary>
 	/// Implements a saga persister for Rebus that stores sagas using an AdoNet provider.
 	/// </summary>
-	public class AdoNetSagaPersister : IStoreSagaData, AdoNetSagaPersisterFluentConfigurer
+	public class AdoNetSagaPersister : IStoreSagaData, AdoNetSagaPersisterFluentConfigurer, ICanUpdateMultipleSagaDatasAtomically
 	{
 		private const int MaximumSagaDataTypeNameLength = 40;
 		private const string SAGA_ID_COLUMN = "id";
@@ -96,7 +96,7 @@ namespace Rebus.AdoNet
 							{
 								new AdoNetColumn() { Name = SAGA_ID_COLUMN, DbType = DbType.Guid },
 								new AdoNetColumn() { Name = SAGA_REVISION_COLUMN, DbType = DbType.Int32 },
-								new AdoNetColumn() { Name = SAGA_DATA_COLUMN, DbType = DbType.String }
+								new AdoNetColumn() { Name = SAGA_DATA_COLUMN, DbType = DbType.String, Length = 1073741823}
 							},
 							PrimaryKey = new[] { SAGA_ID_COLUMN }
 						}
