@@ -75,13 +75,6 @@ namespace Rebus.AdoNet.Dialects
 			var result = identity ? GetIdentityTypeFor(type)
 				: base.GetColumnType(type, length, precision, scale, identity, primary);
 
-#if false
-			// XXX: Avoid tow 'PRIMARY KEY' in output string of column:
-			//		CREATE TABLE "sagas" ( "id" uuid PRIMARY KEY  PRIMARY KEY NOT NULL ,...
-			//		GetColumnType.cs/GetColumnType() do this correctly.
-
-			return string.Format("{0} {1}", result, primary ? " PRIMARY KEY" : "");
-#endif
 			return result;
 		}
 
