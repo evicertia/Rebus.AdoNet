@@ -1,8 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Data;
-using System.Data.Common;
 using System.Linq;
+using System.Data.Common;
+using System.Collections;
+using System.Collections.Generic;
 
 using Newtonsoft.Json;
 
@@ -160,7 +161,7 @@ namespace Rebus.AdoNet
 					command.AddParameter(dialect.EscapeParameter(SAGA_DATA_COLUMN), JsonConvert.SerializeObject(sagaData, Formatting.Indented, Settings));
 
 					command.CommandText = string.Format(
-						@"insert into {0} ({1}, {2}, {3}) values ({4}, {5}, {6});", 
+						@"insert into {0} ({1}, {2}, {3}) values ({4}, {5}, {6});",
 						dialect.QuoteForTableName(sagaTableName),
 						dialect.QuoteForColumnName(SAGA_ID_COLUMN),
 						dialect.QuoteForColumnName(SAGA_REVISION_COLUMN),
@@ -222,7 +223,7 @@ namespace Rebus.AdoNet
 
 					command.CommandText = string.Format(
 						@"UPDATE {0} SET {1} = {2}, {3} = {4} " +
-						@"WHERE {5} = {6} AND {7} = {8};", 
+						@"WHERE {5} = {6} AND {7} = {8};",
 						dialect.QuoteForTableName(sagaTableName),
 						dialect.QuoteForColumnName(SAGA_DATA_COLUMN), dialect.EscapeParameter(SAGA_DATA_COLUMN),
 						dialect.QuoteForColumnName(SAGA_REVISION_COLUMN), dialect.EscapeParameter("next_revision"),
@@ -362,7 +363,7 @@ namespace Rebus.AdoNet
 
 						command.CommandText = string.Format(
 							@"SELECT s.{0} FROM {1} s WHERE s.{2} = {3}",
-							dialect.QuoteForColumnName(SAGA_DATA_COLUMN), 
+							dialect.QuoteForColumnName(SAGA_DATA_COLUMN),
 							dialect.QuoteForTableName(sagaTableName),
 							dialect.QuoteForColumnName(SAGA_ID_COLUMN),
 							parameter
@@ -377,7 +378,7 @@ namespace Rebus.AdoNet
 							@"JOIN {2} i on s.{3} = i.{4} " +
 							@"WHERE i.{5} = {6} AND i.{7} = {8} AND i.{9} = {10}",
 							dialect.QuoteForColumnName(SAGA_DATA_COLUMN),
-							dialect.QuoteForTableName(sagaTableName), 
+							dialect.QuoteForTableName(sagaTableName),
 							dialect.QuoteForTableName(sagaIndexTableName),
 							dialect.QuoteForColumnName(SAGA_ID_COLUMN), dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),
 							dialect.QuoteForColumnName(SAGAINDEX_TYPE_COLUMN), dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN),
@@ -411,10 +412,22 @@ namespace Rebus.AdoNet
 		List<KeyValuePair<string, string>> GetPropertiesToIndex(ISagaData sagaData, IEnumerable<string> sagaDataPropertyPathsToIndex)
 		{
 			return sagaDataPropertyPathsToIndex
-				.Select(path =>
+				.SelectMany(path =>
 				{
 					var value = Reflect.Value(sagaData, path);
-					return new KeyValuePair<string, string>(path, value != null ? value.ToString() : null);
+					var result = new List<KeyValuePair<string, string>>();
+
+					if ((value is IEnumerable) && !(value is string))
+					{
+						foreach (var item in (value as IEnumerable))
+							result.Add(new KeyValuePair<string, string>(path, item?.ToString()));
+					}
+					else
+					{
+						result.Add(new KeyValuePair<string, string>(path, value?.ToString()));
+					}
+
+					return result;
 				})
 				.Where(kvp => indexNullProperties || kvp.Value != null)
 				.ToList();

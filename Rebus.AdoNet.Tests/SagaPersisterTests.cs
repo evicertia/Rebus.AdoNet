@@ -98,6 +98,14 @@ namespace Rebus.AdoNet
 			public Guid Id { get; set; }
 			public int Revision { get; set; }
 		}
+
+		class IEnumerableSagaData : ISagaData
+		{
+			public string SomeField { get; set; }
+			public IEnumerable<string> AnotherFields { get; set; }
+			public Guid Id { get; set; }
+			public int Revision { get; set; }
+		}
 		#endregion
 
 		private static readonly ILog _Log = LogManager.GetLogger<SagaPersisterTests>();
@@ -336,6 +344,16 @@ namespace Rebus.AdoNet
 			};
 		}
 
+		private IEnumerableSagaData EnumerableSagaData(int someNumber, IEnumerable<string> multipleTexts)
+		{
+			return new IEnumerableSagaData
+			{
+				Id = Guid.NewGuid(),
+				SomeField = someNumber.ToString(),
+				AnotherFields = multipleTexts
+			};
+		}
+
 		[Test]
 		public void EnsuresUniquenessAlsoOnCorrelationPropertyWithNull()
 		{
@@ -475,6 +493,22 @@ namespace Rebus.AdoNet
 			Assert.That(dataViaNonexistentField, Is.Null);
 			Assert.That(dataViaNonexistentValue, Is.Null);
 			Assert.That(mySagaData.SomeField, Is.EqualTo("2"));
+		}
+
+		[Test]
+		public void CanFindSagaWithIEnumerableAsCorrelatorId()
+		{
+			var persister = CreatePersister(createTables: true);
+
+			persister.Insert(EnumerableSagaData(3, new string[] { "Field 1", "Field 2", "Field 3"}), new[] { "AnotherFields" });
+
+			var dataViaNonexistentValue = persister.Find<IEnumerableSagaData>("AnotherFields", "non-existent value");
+			var dataViaNonexistentField = persister.Find<IEnumerableSagaData>("SomeFieldThatDoesNotExist", "doesn't matter");
+			var mySagaData = persister.Find<IEnumerableSagaData>("AnotherFields", "Field 3");
+
+			Assert.That(dataViaNonexistentField, Is.Null);
+			Assert.That(dataViaNonexistentValue, Is.Null);
+			Assert.That(mySagaData.SomeField, Is.EqualTo("3"));
 		}
 
 		[Test]
