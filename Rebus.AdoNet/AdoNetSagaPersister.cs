@@ -417,7 +417,7 @@ namespace Rebus.AdoNet
 					var value = Reflect.Value(sagaData, path);
 					var result = new List<KeyValuePair<string, string>>();
 
-					if (value is IEnumerable)
+					if ((value is IEnumerable) && !(value is string))
 					{
 						foreach (var item in (value as IEnumerable))
 							result.Add(new KeyValuePair<string, string>(path, item?.ToString()));
