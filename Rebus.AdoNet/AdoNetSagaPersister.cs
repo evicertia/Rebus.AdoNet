@@ -20,6 +20,7 @@ namespace Rebus.AdoNet
 	{
 		private const int MaximumSagaDataTypeNameLength = 40;
 		private const string SAGA_ID_COLUMN = "id";
+		private const string SAGA_TYPE_COLUMN = "saga_type";
 		private const string SAGA_DATA_COLUMN = "data";
 		private const string SAGA_REVISION_COLUMN = "revision";
 		private const string SAGAINDEX_TYPE_COLUMN = "saga_type";
@@ -96,6 +97,7 @@ namespace Rebus.AdoNet
 							Columns = new []
 							{
 								new AdoNetColumn() { Name = SAGA_ID_COLUMN, DbType = DbType.Guid },
+								new AdoNetColumn() { Name = SAGA_TYPE_COLUMN, DbType = DbType.StringFixedLength, Length = 40 },
 								new AdoNetColumn() { Name = SAGA_REVISION_COLUMN, DbType = DbType.Int32 },
 								new AdoNetColumn() { Name = SAGA_DATA_COLUMN, DbType = DbType.String, Length = 1073741823}
 							},
@@ -152,21 +154,25 @@ namespace Rebus.AdoNet
 				var dialect = scope.Dialect;
 				var connection = scope.Connection;
 				var tableNames = scope.GetTableNames();
+				var sagaTypeName = GetSagaTypeName(sagaData.GetType());
 
 				// next insert the saga
 				using (var command = connection.CreateCommand())
 				{
 					command.AddParameter(dialect.EscapeParameter(SAGA_ID_COLUMN), sagaData.Id);
+					command.AddParameter(dialect.EscapeParameter(SAGA_TYPE_COLUMN), sagaTypeName);
 					command.AddParameter(dialect.EscapeParameter(SAGA_REVISION_COLUMN), ++sagaData.Revision);
 					command.AddParameter(dialect.EscapeParameter(SAGA_DATA_COLUMN), JsonConvert.SerializeObject(sagaData, Formatting.Indented, Settings));
 
 					command.CommandText = string.Format(
-						@"insert into {0} ({1}, {2}, {3}) values ({4}, {5}, {6});",
+						@"insert into {0} ({1}, {2}, {3}, {4}) values ({5}, {6}, {7}, {8});",
 						dialect.QuoteForTableName(sagaTableName),
 						dialect.QuoteForColumnName(SAGA_ID_COLUMN),
+						dialect.QuoteForColumnName(SAGA_TYPE_COLUMN),
 						dialect.QuoteForColumnName(SAGA_REVISION_COLUMN),
 						dialect.QuoteForColumnName(SAGA_DATA_COLUMN),
 						dialect.EscapeParameter(SAGA_ID_COLUMN),
+						dialect.EscapeParameter(SAGA_TYPE_COLUMN),
 						dialect.EscapeParameter(SAGA_REVISION_COLUMN),
 						dialect.EscapeParameter(SAGA_DATA_COLUMN)
 					);
@@ -360,14 +366,18 @@ namespace Rebus.AdoNet
 					{
 						var id = (fieldFromMessage is Guid) ? (Guid)fieldFromMessage : Guid.Parse(fieldFromMessage.ToString());
 						var parameter = dialect.EscapeParameter("value");
+						var sagaType = dialect.EscapeParameter(SAGA_TYPE_COLUMN);
 
 						command.CommandText = string.Format(
-							@"SELECT s.{0} FROM {1} s WHERE s.{2} = {3}",
+							@"SELECT s.{0} FROM {1} s WHERE s.{2} = {3} AND s.{4} = {5}",
 							dialect.QuoteForColumnName(SAGA_DATA_COLUMN),
 							dialect.QuoteForTableName(sagaTableName),
+							dialect.QuoteForColumnName(SAGA_TYPE_COLUMN),
+							sagaType,
 							dialect.QuoteForColumnName(SAGA_ID_COLUMN),
 							parameter
 						);
+						command.AddParameter(sagaType, GetSagaTypeName(typeof(TSagaData)));
 						command.AddParameter(parameter, id);
 					}
 					else
