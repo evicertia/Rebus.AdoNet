@@ -32,6 +32,7 @@ namespace Rebus.AdoNet.Dialects
 
 		#region Properties
 		public virtual ushort Priority => ushort.MaxValue;
+		public virtual bool SupportsSelectForUpdate => false;
 		#endregion
 
 		#region Get Database Version
@@ -67,7 +68,7 @@ namespace Rebus.AdoNet.Dialects
 		}
 
 		/// <summary>
-		/// Suclasses register a typename for the given type code. <c>$l</c> in the 
+		/// Subclasses register a typename for the given type code. <c>$l</c> in the
 		/// typename will be replaced by the column length (if appropriate).
 		/// </summary>
 		/// <param name="code">The typecode</param>
@@ -321,6 +322,11 @@ namespace Rebus.AdoNet.Dialects
 		#endregion
 
 		#region Parameter handling
+
+		/// <summary>
+		/// Gets the Select For Update Parameter
+		/// </summary>
+		public virtual string ParameterSelectForUpdate => string.Empty;
 
 		/// <summary>
 		/// Gets the parameter placeholder.

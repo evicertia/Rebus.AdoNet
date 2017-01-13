@@ -37,6 +37,7 @@ namespace Rebus.AdoNet
 		private readonly string sagaIndexTableName;
 		private readonly string sagaTableName;
 		private readonly string idPropertyName;
+		private readonly bool useSagaLocking;
 		private bool indexNullProperties = true;
 		private Func<Type, string> sagaNameCustomizer = null;
 
@@ -49,12 +50,13 @@ namespace Rebus.AdoNet
 		/// Constructs the persister with the ability to create connections to database using the specified connection string.
 		/// This also means that the persister will manage the connection by itself, closing it when it has stopped using it.
 		/// </summary>
-		public AdoNetSagaPersister(AdoNetUnitOfWorkManager manager, string sagaTableName, string sagaIndexTableName)
+		public AdoNetSagaPersister(AdoNetUnitOfWorkManager manager, string sagaTableName, string sagaIndexTableName, bool useSagaLocking)
 		{
 			this.manager = manager;
 			this.sagaTableName = sagaTableName;
 			this.sagaIndexTableName = sagaIndexTableName;
 			this.idPropertyName = Reflect.Path<ISagaData>(x => x.Id);
+			this.useSagaLocking = useSagaLocking;
 		}
 
 		/// <summary>
@@ -360,6 +362,9 @@ namespace Rebus.AdoNet
 				var dialect = scope.Dialect;
 				var connection = scope.Connection;
 
+				if (useSagaLocking && !dialect.SupportsSelectForUpdate)
+					throw new InvalidOperationException($"You can't use saga locking for a Dialect {dialect.GetType()} that is not supporting Select For Update");
+
 				using (var command = connection.CreateCommand())
 				{
 					if (sagaDataPropertyPath == idPropertyName)
@@ -369,13 +374,14 @@ namespace Rebus.AdoNet
 						var sagaType = dialect.EscapeParameter(SAGA_TYPE_COLUMN);
 
 						command.CommandText = string.Format(
-							@"SELECT s.{0} FROM {1} s WHERE s.{2} = {3} AND s.{4} = {5}",
+							@"SELECT s.{0} FROM {1} s WHERE s.{2} = {3} AND s.{4} = {5} {6}",
 							dialect.QuoteForColumnName(SAGA_DATA_COLUMN),
 							dialect.QuoteForTableName(sagaTableName),
 							dialect.QuoteForColumnName(SAGA_TYPE_COLUMN),
 							sagaType,
 							dialect.QuoteForColumnName(SAGA_ID_COLUMN),
-							parameter
+							parameter,
+							useSagaLocking ? dialect.ParameterSelectForUpdate : string.Empty
 						);
 						command.AddParameter(sagaType, GetSagaTypeName(typeof(TSagaData)));
 						command.AddParameter(parameter, id);
@@ -386,15 +392,15 @@ namespace Rebus.AdoNet
 							@"SELECT s.{0} " +
 							@"FROM {1} s " +
 							@"JOIN {2} i on s.{3} = i.{4} " +
-							@"WHERE i.{5} = {6} AND i.{7} = {8} AND i.{9} = {10}",
+							@"WHERE i.{5} = {6} AND i.{7} = {8} AND i.{9} = {10} {11}",
 							dialect.QuoteForColumnName(SAGA_DATA_COLUMN),
 							dialect.QuoteForTableName(sagaTableName),
 							dialect.QuoteForTableName(sagaIndexTableName),
 							dialect.QuoteForColumnName(SAGA_ID_COLUMN), dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),
 							dialect.QuoteForColumnName(SAGAINDEX_TYPE_COLUMN), dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN),
 							dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN), dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN),
-							dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN), dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN)
-
+							dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN), dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN),
+							useSagaLocking ? dialect.ParameterSelectForUpdate : string.Empty
 						);
 						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN), sagaDataPropertyPath);
 						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), GetSagaTypeName(typeof(TSagaData)));
