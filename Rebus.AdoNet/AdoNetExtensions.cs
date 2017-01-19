@@ -34,14 +34,15 @@ namespace Rebus.AdoNet
 		/// <summary>
 		/// Configures Rebus to store sagas in AdoNet.
 		/// </summary>
-		public static AdoNetSagaPersisterFluentConfigurer StoreInAdoNet(this RebusSagasConfigurer configurer, string connectionStringName, string sagaTable, string sagaIndexTable)
+		public static AdoNetSagaPersisterFluentConfigurer StoreInAdoNet(this RebusSagasConfigurer configurer, string connectionStringName, string sagaTable, string sagaIndexTable,
+			bool useSagaLocking = false)
 		{
 			var connString = GetConnectionString(connectionStringName);
 			var factory = new AdoNetConnectionFactory(connString.ConnectionString, connString.ProviderName);
 			var manager = new AdoNetUnitOfWorkManager(factory);
 
 			configurer.Backbone.ConfigureEvents(x => x.AddUnitOfWorkManager(manager));
-			var persister = new AdoNetSagaPersister(manager, sagaTable, sagaIndexTable);
+			var persister = new AdoNetSagaPersister(manager, sagaTable, sagaIndexTable, useSagaLocking);
 
 			configurer.Use(persister);
 
