@@ -82,10 +82,19 @@ namespace Rebus.AdoNet
 				var tableNames = scope.GetTableNames();
 
 				// bail out if there's already a table in the database with one of the names
-				if (tableNames.Contains(sagaTableName, StringComparer.InvariantCultureIgnoreCase)
-					|| tableNames.Contains(sagaIndexTableName, StringComparer.OrdinalIgnoreCase))
+				var sagaTableIsAlreadyCreated = tableNames.Contains(sagaTableName, StringComparer.InvariantCultureIgnoreCase);
+				var sagaIndexTableIsAlreadyCreated = tableNames.Contains(sagaIndexTableName, StringComparer.OrdinalIgnoreCase);
+
+				if (sagaTableIsAlreadyCreated && sagaIndexTableIsAlreadyCreated)
 				{
 					return this;
+				}
+
+				if (sagaTableIsAlreadyCreated || sagaIndexTableIsAlreadyCreated)
+				{
+					// if saga index is created, then saga table is not created and vice versa
+					throw new ApplicationException(string.Format("Table '{0}' do not exist - you have to create it manually",
+						sagaIndexTableIsAlreadyCreated ? sagaTableName : sagaIndexTableName));
 				}
 
 				log.Info("Tables '{0}' and '{1}' do not exist - they will be created now", sagaTableName, sagaIndexTableName);
