@@ -4,7 +4,7 @@ using System.Linq;
 using System.Data.Common;
 using System.Collections;
 using System.Collections.Generic;
-
+using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 
 using Rebus.Logging;
@@ -458,9 +458,52 @@ namespace Rebus.AdoNet
 				.ToList();
 		}
 
+		#region Default saga name
+
+		private static string GetClassName(Type type)
+		{
+			var classNameRegex = new Regex("^[a-zA-Z0-9_]*[\\w]", RegexOptions.IgnoreCase);
+			var match = classNameRegex.Match(type.Name);
+
+			if (!match.Success) throw new Exception($"Error trying extract name class from type: {type.Name}");
+
+			return match.Value;
+		}
+
+		private static IEnumerable<string> GetGenericArguments(Type type)
+		{
+			return type.GetGenericArguments()
+				.Select(x => x.Name)
+				.ToList();
+		}
+
+		private static string GetDefaultSagaName(Type type)
+		{
+			var declaringType = type.DeclaringType;
+
+			if (type.IsNested && declaringType != null)
+			{
+				if (declaringType.IsGenericType)
+				{
+					var className = GetClassName(declaringType);
+					var genericArguments = GetGenericArguments(type).ToList();
+
+					return genericArguments.Any()
+						? $"{className}<{string.Join(",", genericArguments)}>"
+						: $"{className}";
+				}
+
+				return declaringType.Name;
+			}
+
+			return type.Name;
+		}
+
+		#endregion
+
 		private string GetSagaTypeName(Type sagaDataType)
 		{
-			var sagaTypeName = sagaNameCustomizer != null ? sagaNameCustomizer(sagaDataType) : sagaDataType.Name;
+			var sagaTypeName = sagaNameCustomizer != null ? sagaNameCustomizer(sagaDataType) : GetDefaultSagaName(sagaDataType);
 
 			if (sagaTypeName.Length > MaximumSagaDataTypeNameLength)
 			{
