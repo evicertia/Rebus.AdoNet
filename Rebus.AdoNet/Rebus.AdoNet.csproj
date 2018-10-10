@@ -58,6 +58,8 @@
     <Compile Include="AdoNetUnitOfWorkManager.cs" />
     <Compile Include="AdoNetUnitOfWorkScope.cs" />
     <Compile Include="Dialects\PostgreSqlDialect.cs" />
+    <Compile Include="Dialects\PostgreSqlDialect9_1.cs" />
+    <Compile Include="Dialects\PostgreSqlDialect9_5.cs" />
     <Compile Include="Dialects\SqliteDialect.cs" />
     <Compile Include="Dialects\TypeNames.cs" />
     <Compile Include="AdoNetUnitOfWork.cs" />

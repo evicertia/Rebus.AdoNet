@@ -33,6 +33,9 @@ namespace Rebus.AdoNet.Dialects
 		#region Properties
 		public virtual ushort Priority => ushort.MaxValue;
 		public virtual bool SupportsSelectForUpdate => false;
+		public virtual bool SupportsSkipLocked => false;
+		public virtual bool SupportsPgTryAdvisoryXactLock => false;
+		public virtual bool SupportsPgTryAdvisoryLock => false;
 		#endregion
 
 		#region Get Database Version

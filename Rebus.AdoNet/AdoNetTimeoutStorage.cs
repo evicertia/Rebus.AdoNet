@@ -80,6 +80,50 @@ namespace Rebus.AdoNet
 			}
 		}
 
+		public string GetSqlForDialect(IDbConnection connection)
+		{
+			// PostgresSql Dialects
+			if (factory.Dialect.SupportsPgTryAdvisoryXactLock || factory.Dialect.SupportsPgTryAdvisoryLock || factory.Dialect.SupportsSkipLocked)
+			{
+				return GetSqlForPostgreSqlDialect(new Version(factory.Dialect.GetDatabaseVersion(connection)));
+			}
+
+			string sql = @"SELECT ""id"", ""time_to_return"", ""correlation_id"", ""saga_id"", ""reply_to"", ""custom_data""
+						FROM ""{0}""
+						WHERE ""time_to_return"" <= @current_time
+						ORDER BY ""time_to_return"" ASC";
+			return sql;
+
+		}
+
+		public string GetSqlForPostgreSqlDialect(Version version)
+		{
+			// Version between 9.1 and 9.5
+			if (version < new Version("9.5") && version > new Version("9.1"))
+			{
+				return @"SELECT ""id"", ""time_to_return"", ""correlation_id"", ""saga_id"", ""reply_to"", ""custom_data""
+						FROM ""{0}""
+						WHERE ""time_to_return"" <= @current_time AND pg_try_advisory_xact_lock(""id"")
+						ORDER BY ""time_to_return"" ASC";
+			}
+
+			// Version leater than 9.5 or 9.5
+			if (version == new Version("9.5") || version > new Version("9.5"))
+			{
+				return @"SELECT ""id"", ""time_to_return"", ""correlation_id"", ""saga_id"", ""reply_to"", ""custom_data""
+						FROM ""{0}""
+						WHERE ""time_to_return"" <= @current_time
+						ORDER BY ""time_to_return"" ASC
+						FOR UPDATE SKIP LOCKED";
+			}
+
+			// Version earlier than 9.1
+			return @"SELECT ""id"", ""time_to_return"", ""correlation_id"", ""saga_id"", ""reply_to"", ""custom_data""
+					FROM ""{0}""
+					WHERE ""time_to_return"" <= @current_time AND pg_try_advisory_lock(""id"")
+					ORDER BY ""time_to_return"" ASC";
+		}
+
 		/// <summary>
 		/// Queries the underlying table and returns due timeouts, removing them at the same time
 		/// </summary>
@@ -87,15 +131,14 @@ namespace Rebus.AdoNet
 		{
 			var dueTimeouts = new List<DueTimeout>();
 
-			using (var connection = factory.OpenConnection())
+			var connection = factory.OpenConnection();
+			var transaction = connection.BeginTransaction();
+
 			using (var command = connection.CreateCommand())
 			{
-				const string sql = @"
-SELECT ""id"", ""time_to_return"", ""correlation_id"", ""saga_id"", ""reply_to"", ""custom_data""
-FROM ""{0}""
-WHERE ""time_to_return"" <= @current_time
-ORDER BY ""time_to_return"" ASC
-";
+				command.Transaction = transaction;
+
+				string sql = GetSqlForDialect(connection);
 
 				command.CommandText = string.Format(sql, timeoutsTableName);
 
@@ -105,20 +148,33 @@ ORDER BY ""time_to_return"" ASC
 				{
 					while (reader.Read())
 					{
-						var sqlTimeout = DueAdoNetTimeout.Create(MarkAsProcessed, timeoutsTableName, reader);
+						var sqlTimeout = DueAdoNetTimeout.Create(MarkAsProcessed, timeoutsTableName, reader, connection, transaction);
 
 						dueTimeouts.Add(sqlTimeout);
 					}
 				}
 			}
 
-			return new DueTimeoutsResult(dueTimeouts);
+			return new DueTimeoutsResult(dueTimeouts, () => CommitAndClose(connection, transaction));
+		}
+
+		void CommitAndClose(IDbConnection connection, IDbTransaction transaction)
+		{
+			try
+			{
+				transaction.Commit();
+				transaction.Dispose();
+				connection.Dispose();
+			}
+			catch (Exception ex)
+			{
+				log.Error("CloseAndCommit produced an exception: {0}", ex.Message);
+			}
 		}
 
 		void MarkAsProcessed(DueAdoNetTimeout dueTimeout)
 		{
-			using (var connection = factory.OpenConnection())
-			using (var command = connection.CreateCommand())
+			using (var command = dueTimeout.Connection.CreateCommand())
 			{
 				command.CommandText = string.Format(@"DELETE FROM ""{0}"" WHERE ""id"" = @id", timeoutsTableName);
 				command.AddParameter("id", dueTimeout.Id);
@@ -180,18 +236,25 @@ ORDER BY ""time_to_return"" ASC
 		{
 			readonly Action<DueAdoNetTimeout> markAsProcessedAction;
 			readonly string timeoutsTableName;
+			readonly IDbConnection _connection;
+			readonly IDbTransaction _transaction;
+
+			public IDbConnection Connection => _connection;
+			public IDbTransaction Transaction => _transaction;
 
 			readonly long id;
 
-			public DueAdoNetTimeout(Action<DueAdoNetTimeout> markAsProcessedAction, string timeoutsTableName, long id, string replyTo, string correlationId, DateTime timeToReturn, Guid sagaId, string customData)
+			public DueAdoNetTimeout(Action<DueAdoNetTimeout> markAsProcessedAction, string timeoutsTableName, long id, string replyTo, string correlationId, DateTime timeToReturn, Guid sagaId, string customData, IDbConnection connection, IDbTransaction transaction)
 				: base(replyTo, correlationId, timeToReturn, sagaId, customData)
 			{
 				this.markAsProcessedAction = markAsProcessedAction;
 				this.timeoutsTableName = timeoutsTableName;
 				this.id = id;
+				this._connection = connection;
+				this._transaction = transaction;
 			}
 
-			public static DueAdoNetTimeout Create(Action<DueAdoNetTimeout> markAsProcessedAction, string timeoutsTableName, IDataReader reader)
+			public static DueAdoNetTimeout Create(Action<DueAdoNetTimeout> markAsProcessedAction, string timeoutsTableName, IDataReader reader, IDbConnection connection, IDbTransaction transaction)
 			{
 				var id = (long)reader["id"];
 				var correlationId = (string)reader["correlation_id"];
@@ -200,7 +263,7 @@ ORDER BY ""time_to_return"" ASC
 				var timeToReturn = (DateTime)reader["time_to_return"];
 				var customData = (string)(reader["custom_data"] != DBNull.Value ? reader["custom_data"] : "");
 
-				var timeout = new DueAdoNetTimeout(markAsProcessedAction, timeoutsTableName, id, replyTo, correlationId, timeToReturn, sagaId, customData);
+				var timeout = new DueAdoNetTimeout(markAsProcessedAction, timeoutsTableName, id, replyTo, correlationId, timeToReturn, sagaId, customData, connection, transaction);
 
 				return timeout;
 			}
