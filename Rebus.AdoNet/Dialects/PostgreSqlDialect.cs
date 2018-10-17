@@ -46,8 +46,17 @@ namespace Rebus.AdoNet.Dialects
 
 		#region Overrides
 		public override bool SupportsSelectForUpdate => true;
-		public override bool SupportsPgTryAdvisoryLock => true;
+		public override bool SupportsTryAdvisoryLockFunction => true;
 		public override string ParameterSelectForUpdate => "FOR UPDATE";
+
+		public virtual string ParameterSkipLocked => string.Empty;
+
+		// Version less than 9.1
+		public virtual Version DatabaseVersion => new Version("8.4");
+		public virtual string Sql =>  @"SELECT ""id"", ""time_to_return"", ""correlation_id"", ""saga_id"", ""reply_to"", ""custom_data""
+										FROM ""{0}""
+										WHERE ""time_to_return"" <= @current_time AND pg_try_advisory_lock(""id"")
+										ORDER BY ""time_to_return"" ASC";
 
 		public override bool SupportsThisDialect(IDbConnection connection)
 		{
@@ -84,6 +93,20 @@ namespace Rebus.AdoNet.Dialects
 			return result;
 		}
 
+		public override string GetSql(Version version)
+		{
+			if(version >= new Dialects.PostgreSqlDialect9_5().DatabaseVersion)
+			{
+				return new Dialects.PostgreSqlDialect9_5().Sql;
+			}
+
+			if (version >= new Dialects.PostgreSqlDialect9_1().DatabaseVersion)
+			{
+				return new Dialects.PostgreSqlDialect9_1().Sql;
+			}
+
+			return new Dialects.PostgreSqlDialect().Sql;
+		}
 		#endregion
 	}
 }
