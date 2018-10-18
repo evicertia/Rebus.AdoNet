@@ -10,7 +10,7 @@ namespace Rebus.AdoNet.Dialects
 		private Version MinimumDatabaseVersion => new Version("9.1");
 
 		public override bool SupportsTryAdvisoryXactLockFunction => true;
-		public override ushort Priority => 2;
+		public override ushort Priority => 91;
 
 		public override bool SupportsThisDialect(IDbConnection connection)
 		{

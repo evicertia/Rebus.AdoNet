@@ -10,7 +10,7 @@ namespace Rebus.AdoNet.Dialects
 		public override bool SupportsSkipLockedFunction => true;
 		public override string ParameterSkipLocked => "SKIP LOCKED";
 		public override string ParameterSelectForUpdate => "FOR UPDATE";
-		public override ushort Priority => 1;
+		public override ushort Priority => 95;
 
 		public override bool SupportsThisDialect(IDbConnection connection)
 		{

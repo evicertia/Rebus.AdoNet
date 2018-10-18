@@ -47,7 +47,6 @@ namespace Rebus.AdoNet.Dialects
 		#region Overrides
 		public override bool SupportsSelectForUpdate => true;
 		public override bool SupportsTryAdvisoryLockFunction => true;
-		public override ushort Priority => 3;
 
 		public override bool SupportsThisDialect(IDbConnection connection)
 		{

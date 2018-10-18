@@ -127,11 +127,11 @@ namespace Rebus.AdoNet
 			}
 			else if (dialect.SupportsTryAdvisoryXactLockFunction)
 			{
-				lockPredicate = $"AND " + dialect.FormatTryAdvisoryXactLock(new List<object>() { "id" });
+				lockPredicate = $"AND " + dialect.FormatTryAdvisoryXactLock(new[] { "id" });
 			}
 			else if (dialect.SupportsTryAdvisoryLockFunction)
 			{
-				lockPredicate = $"AND " + dialect.FormatTryAdvisoryLock(new List<object>() { "id" });
+				lockPredicate = $"AND " + dialect.FormatTryAdvisoryLock(new[] { "id" });
 			}
 
 			return  $"SELECT id, time_to_return, correlation_id, saga_id, reply_to, custom_data " +
