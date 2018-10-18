@@ -31,7 +31,7 @@ namespace Rebus.AdoNet.Dialects
 		#endregion
 
 		#region Properties
-		public virtual ushort Priority => ushort.MaxValue;
+		public virtual ushort Priority => ushort.MinValue;
 		public virtual bool SupportsSelectForUpdate => false;
 		#endregion
 
@@ -436,6 +436,26 @@ namespace Rebus.AdoNet.Dialects
 
 		#endregion
 
+		#region SkipLocked
+		public virtual bool SupportsSkipLockedFunction => false;
+		public virtual string ParameterSkipLocked => string.Empty;
+		#endregion
+
+		#region AdvisoryLockFunctions
+		public virtual bool SupportsTryAdvisoryLockFunction => false;
+		public virtual bool SupportsTryAdvisoryXactLockFunction => false;
+
+		public virtual string FormatTryAdvisoryLock(IEnumerable<object> args)
+		{
+			throw new NotSupportedException("TryAdvisoryLock function not supported by this dialect.");
+		}
+
+		public virtual string FormatTryAdvisoryXactLock(IEnumerable<object> args)
+		{
+			throw new NotSupportedException("TryAdvisoryXactLock function not supported by this dialect.");
+		}
+		#endregion
+
 		#region SqlDialects Registry
 
 		private static readonly IList<SqlDialect> _dialects =
@@ -457,7 +477,7 @@ namespace Rebus.AdoNet.Dialects
 		{
 			lock (_dialects)
 			{
-				return _dialects.OrderBy(x => x.Priority).ToArray();
+				return _dialects.OrderByDescending(x => x.Priority).ToArray();
 			}
 		}
 

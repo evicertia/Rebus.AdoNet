@@ -7,6 +7,7 @@ using System.Linq;
 using Rebus.Logging;
 using Rebus.Timeout;
 using Rebus.AdoNet.Schema;
+using Rebus.AdoNet.Dialects;
 
 namespace Rebus.AdoNet
 {
@@ -19,6 +20,7 @@ namespace Rebus.AdoNet
 
 		readonly AdoNetConnectionFactory factory;
 		readonly string timeoutsTableName;
+		readonly SqlDialect dialect;
 
 		static AdoNetTimeoutStorage()
 		{
@@ -33,6 +35,7 @@ namespace Rebus.AdoNet
 		{
 			this.factory = factory;
 			this.timeoutsTableName = timeoutsTableName;
+			this.dialect = factory.Dialect;
 		}
 
 		/// <summary>
@@ -80,52 +83,106 @@ namespace Rebus.AdoNet
 			}
 		}
 
+		private void SafeDispose(IDisposable obj, string message, params object[] args)
+		{
+			try
+			{
+				obj?.Dispose();
+			}
+			catch (Exception ex)
+			{
+				log.Error(ex, message, args);
+			}
+		}
+
+		private void CommitAndClose(IDbConnection connection, IDbTransaction transaction)
+		{
+			try
+			{
+				transaction.Commit();
+			}
+			catch (Exception ex)
+			{
+				log.Error("Commiting the transaction produced an exception: {0}", ex);
+			}
+			finally
+			{
+				SafeDispose(transaction, "Disposing the transaction produced an exception.");
+				SafeDispose(connection, "Disposing the connection produced an exception");
+			}
+		}
+
+		#region GetDueTimeouts
+		private static string FormatGetTimeoutsDueQuery(SqlDialect dialect, string tableName)
+		{
+
+			var forUpdateStmt = string.Empty;
+			var skipLockedStmt = string.Empty;
+			var lockPredicate = string.Empty;
+
+			if (dialect.SupportsSelectForUpdate && dialect.SupportsSkipLockedFunction)
+			{
+				forUpdateStmt = dialect.ParameterSelectForUpdate;
+				skipLockedStmt = dialect.ParameterSkipLocked;
+			}
+			else if (dialect.SupportsTryAdvisoryXactLockFunction)
+			{
+				lockPredicate = $"AND " + dialect.FormatTryAdvisoryXactLock(new[] { "id" });
+			}
+			else if (dialect.SupportsTryAdvisoryLockFunction)
+			{
+				lockPredicate = $"AND " + dialect.FormatTryAdvisoryLock(new[] { "id" });
+			}
+
+			return  $"SELECT id, time_to_return, correlation_id, saga_id, reply_to, custom_data " +
+					$"FROM {tableName} " +
+					$"WHERE time_to_return <= @current_time {lockPredicate} " +
+					$"ORDER BY time_to_return ASC " +
+					$"{forUpdateStmt} {skipLockedStmt}";
+		}
+
 		/// <summary>
 		/// Queries the underlying table and returns due timeouts, removing them at the same time
 		/// </summary>
 		public DueTimeoutsResult GetDueTimeouts()
 		{
 			var dueTimeouts = new List<DueTimeout>();
+			IDbConnection connection = null;
+			IDbTransaction transaction = null;
 
-			using (var connection = factory.OpenConnection())
-			using (var command = connection.CreateCommand())
+			try
 			{
-				const string sql = @"
-SELECT ""id"", ""time_to_return"", ""correlation_id"", ""saga_id"", ""reply_to"", ""custom_data""
-FROM ""{0}""
-WHERE ""time_to_return"" <= @current_time
-ORDER BY ""time_to_return"" ASC
-";
+				connection = factory.OpenConnection();
+				transaction = connection.BeginTransaction();
 
-				command.CommandText = string.Format(sql, timeoutsTableName);
-
-				command.AddParameter("current_time", RebusTimeMachine.Now());
-
-				using (var reader = command.ExecuteReader())
+				using (var command = connection.CreateCommand())
 				{
-					while (reader.Read())
-					{
-						var sqlTimeout = DueAdoNetTimeout.Create(MarkAsProcessed, timeoutsTableName, reader);
+					command.Transaction = transaction;
+					command.CommandText = FormatGetTimeoutsDueQuery(dialect, timeoutsTableName);
+					command.AddParameter("current_time", RebusTimeMachine.Now());
 
-						dueTimeouts.Add(sqlTimeout);
+					using (var reader = command.ExecuteReader())
+					{
+						while (reader.Read())
+						{
+							var sqlTimeout = DueAdoNetTimeout.Create(connection, timeoutsTableName, reader);
+
+							dueTimeouts.Add(sqlTimeout);
+						}
 					}
 				}
 			}
-
-			return new DueTimeoutsResult(dueTimeouts);
-		}
-
-		void MarkAsProcessed(DueAdoNetTimeout dueTimeout)
-		{
-			using (var connection = factory.OpenConnection())
-			using (var command = connection.CreateCommand())
+			catch (Exception ex)
 			{
-				command.CommandText = string.Format(@"DELETE FROM ""{0}"" WHERE ""id"" = @id", timeoutsTableName);
-				command.AddParameter("id", dueTimeout.Id);
+				log.Error("GetDueTimeout produced an exception: {0}", ex);
 
-				command.ExecuteNonQuery();
+				SafeDispose(transaction, "Disposing the transaction after exception produced other exception.");
+				SafeDispose(connection, "Disposing the connection after exception produced other exception");
 			}
+
+			return new DueTimeoutsResult(dueTimeouts, () => CommitAndClose(connection, transaction));
 		}
+		#endregion
 
 		/// <summary>
 		/// Creates the necessary timeout storage table if it hasn't already been created. If a table already exists
@@ -178,20 +235,25 @@ ORDER BY ""time_to_return"" ASC
 
 		public class DueAdoNetTimeout : DueTimeout
 		{
-			readonly Action<DueAdoNetTimeout> markAsProcessedAction;
 			readonly string timeoutsTableName;
+			readonly IDbConnection connection;
 
 			readonly long id;
 
-			public DueAdoNetTimeout(Action<DueAdoNetTimeout> markAsProcessedAction, string timeoutsTableName, long id, string replyTo, string correlationId, DateTime timeToReturn, Guid sagaId, string customData)
-				: base(replyTo, correlationId, timeToReturn, sagaId, customData)
+			public long Id
 			{
-				this.markAsProcessedAction = markAsProcessedAction;
-				this.timeoutsTableName = timeoutsTableName;
-				this.id = id;
+				get { return id; }
 			}
 
-			public static DueAdoNetTimeout Create(Action<DueAdoNetTimeout> markAsProcessedAction, string timeoutsTableName, IDataReader reader)
+			public DueAdoNetTimeout(IDbConnection connection, string timeoutsTableName, long id, string replyTo, string correlationId, DateTime timeToReturn, Guid sagaId, string customData)
+				: base(replyTo, correlationId, timeToReturn, sagaId, customData)
+			{
+				this.timeoutsTableName = timeoutsTableName;
+				this.id = id;
+				this.connection = connection;
+			}
+
+			public static DueAdoNetTimeout Create(IDbConnection connection, string timeoutsTableName, IDataReader reader)
 			{
 				var id = (long)reader["id"];
 				var correlationId = (string)reader["correlation_id"];
@@ -200,19 +262,23 @@ ORDER BY ""time_to_return"" ASC
 				var timeToReturn = (DateTime)reader["time_to_return"];
 				var customData = (string)(reader["custom_data"] != DBNull.Value ? reader["custom_data"] : "");
 
-				var timeout = new DueAdoNetTimeout(markAsProcessedAction, timeoutsTableName, id, replyTo, correlationId, timeToReturn, sagaId, customData);
+				var timeout = new DueAdoNetTimeout(connection, timeoutsTableName, id, replyTo, correlationId, timeToReturn, sagaId, customData);
 
 				return timeout;
 			}
 
 			public override void MarkAsProcessed()
 			{
-				markAsProcessedAction(this);
-			}
+				lock (connection)
+				{
+					using (var command = connection.CreateCommand())
+					{
+						command.CommandText = string.Format(@"DELETE FROM ""{0}"" WHERE ""id"" = @id", timeoutsTableName);
+						command.AddParameter("id", this.id);
 
-			public long Id
-			{
-				get { return id; }
+						command.ExecuteNonQuery();
+					}
+				}
 			}
 		}
 	}

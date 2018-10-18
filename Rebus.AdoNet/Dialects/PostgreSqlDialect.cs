@@ -46,7 +46,7 @@ namespace Rebus.AdoNet.Dialects
 
 		#region Overrides
 		public override bool SupportsSelectForUpdate => true;
-		public override string ParameterSelectForUpdate => "FOR UPDATE";
+		public override bool SupportsTryAdvisoryLockFunction => true;
 
 		public override bool SupportsThisDialect(IDbConnection connection)
 		{
@@ -83,6 +83,21 @@ namespace Rebus.AdoNet.Dialects
 			return result;
 		}
 
+		public override string FormatTryAdvisoryLock(IEnumerable<object> args)
+		{
+			var @params = "";
+
+			if (args.Count() > 1)
+			{
+				@params = string.Join(",", args);
+			}
+			else
+			{
+				@params = Convert.ToString(args.First());
+			}
+
+			return $"pg_try_advisory_lock({@params})";
+		}
 		#endregion
 	}
 }
