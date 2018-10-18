@@ -11,11 +11,6 @@ namespace Rebus.AdoNet.Dialects
 	{
 		public override bool SeparatePrimaryKeyDeclaration => false;
 
-		public virtual string Sql =>  @"SELECT ""id"", ""time_to_return"", ""correlation_id"", ""saga_id"", ""reply_to"", ""custom_data""
-										FROM ""{0}""
-										WHERE ""time_to_return"" <= @current_time
-										ORDER BY ""time_to_return"" ASC";
-
 		public SqliteDialect()
 		{
 			RegisterColumnType(DbType.Binary, "BLOB");
@@ -70,11 +65,6 @@ namespace Rebus.AdoNet.Dialects
 			return identity ?
 				"INTEGER PRIMARY KEY AUTOINCREMENT" //< This is all you can get from sqlite's identity/auto-increment support.
 				: base.GetColumnType(type, length, precision, scale, identity, primary);
-		}
-
-		public override string GetSql(Version version)
-		{
-			return Sql;
 		}
 	}
 }

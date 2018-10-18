@@ -33,9 +33,6 @@ namespace Rebus.AdoNet.Dialects
 		#region Properties
 		public virtual ushort Priority => ushort.MaxValue;
 		public virtual bool SupportsSelectForUpdate => false;
-		public virtual bool SupportsSkipLockedFunction => false;
-		public virtual bool SupportsTryAdvisoryXactLockFunction => false;
-		public virtual bool SupportsTryAdvisoryLockFunction => false;
 		#endregion
 
 		#region Get Database Version
@@ -53,8 +50,6 @@ namespace Rebus.AdoNet.Dialects
 		#endregion
 
 		public abstract bool SupportsThisDialect(IDbConnection connection);
-
-		public abstract string GetSql(Version version);
 
 		#region Database type mapping support
 		private readonly TypeNames _typeNames = new TypeNames();
@@ -439,6 +434,26 @@ namespace Rebus.AdoNet.Dialects
 			);
 		}
 
+		#endregion
+
+		#region SkipLocked
+		public virtual bool SupportsSkipLockedFunction => false;
+		public virtual string ParameterSkipLocked => string.Empty;
+		#endregion
+
+		#region AdvisoryLockFunctions
+		public virtual bool SupportsTryAdvisoryLockFunction => false;
+		public virtual bool SupportsTryAdvisoryXactLockFunction => false;
+
+		public virtual string FormatTryAdvisoryLock(IEnumerable<object> args)
+		{
+			throw new NotSupportedException("TryAdvisoryLock function not supported by this dialect.");
+		}
+
+		public virtual string FormatTryAdvisoryXactLock(IEnumerable<object> args)
+		{
+			throw new NotSupportedException("TryAdvisoryXactLock function not supported by this dialect.");
+		}
 		#endregion
 
 		#region SqlDialects Registry
