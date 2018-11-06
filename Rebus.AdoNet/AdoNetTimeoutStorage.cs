@@ -237,8 +237,7 @@ namespace Rebus.AdoNet
 							PrimaryKey = new[] { "id" },
 							Indexes = new[]
 							{
-								new AdoNetIndex() { Name = "ix_" + timeoutsTableName + "_alarm", Columns = new[] { "time_to_return" } },
-								new AdoNetIndex() { Name = "ix_" + timeoutsTableName + "_id", Columns = new[] { "id" } }
+								new AdoNetIndex() { Name = "ix_" + timeoutsTableName + "_alarm", Columns = new[] { "time_to_return" } }
 							}
 						}
 					);
