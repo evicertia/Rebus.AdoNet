@@ -21,6 +21,7 @@ namespace Rebus.AdoNet
 		readonly AdoNetConnectionFactory factory;
 		readonly string timeoutsTableName;
 		readonly SqlDialect dialect;
+		readonly uint batchSize;
 
 		static AdoNetTimeoutStorage()
 		{
@@ -31,11 +32,20 @@ namespace Rebus.AdoNet
 		/// Constructs the timeout storage which will use the specified connection string to connect to a database,
 		/// storing the timeouts in the table with the specified name
 		/// </summary>
-		public AdoNetTimeoutStorage(AdoNetConnectionFactory factory, string timeoutsTableName)
+		public AdoNetTimeoutStorage(AdoNetConnectionFactory factory, string timeoutsTableName) : this(factory, timeoutsTableName, 0)
+		{
+		}
+
+		/// <summary>
+		/// Constructs the timeout storage which will use the specified connection string to connect to a database,
+		/// storing the timeouts in the table with the specified name and limit
+		/// </summary>
+		public AdoNetTimeoutStorage(AdoNetConnectionFactory factory, string timeoutsTableName, uint batchSize)
 		{
 			this.factory = factory;
 			this.timeoutsTableName = timeoutsTableName;
 			this.dialect = factory.Dialect;
+			this.batchSize = batchSize;
 		}
 
 		/// <summary>
@@ -113,12 +123,13 @@ namespace Rebus.AdoNet
 		}
 
 		#region GetDueTimeouts
-		private static string FormatGetTimeoutsDueQuery(SqlDialect dialect, string tableName)
+		private static string FormatGetTimeoutsDueQuery(SqlDialect dialect, string tableName, uint batchSize)
 		{
 
 			var forUpdateStmt = string.Empty;
 			var skipLockedStmt = string.Empty;
 			var lockPredicate = string.Empty;
+			var limitPredicate = string.Empty;
 
 			if (dialect.SupportsSelectForUpdate && dialect.SupportsSkipLockedFunction)
 			{
@@ -134,11 +145,17 @@ namespace Rebus.AdoNet
 				lockPredicate = $"AND " + dialect.FormatTryAdvisoryLock(new[] { "id" });
 			}
 
+			if(batchSize != 0)
+			{
+				limitPredicate = "LIMIT " + batchSize;
+			}
+
 			return  $"SELECT id, time_to_return, correlation_id, saga_id, reply_to, custom_data " +
 					$"FROM {tableName} " +
 					$"WHERE time_to_return <= @current_time {lockPredicate} " +
 					$"ORDER BY time_to_return ASC " +
-					$"{forUpdateStmt} {skipLockedStmt}";
+					$"{forUpdateStmt} {skipLockedStmt} " +
+					$"{limitPredicate}";
 		}
 
 		/// <summary>
@@ -158,7 +175,7 @@ namespace Rebus.AdoNet
 				using (var command = connection.CreateCommand())
 				{
 					command.Transaction = transaction;
-					command.CommandText = FormatGetTimeoutsDueQuery(dialect, timeoutsTableName);
+					command.CommandText = FormatGetTimeoutsDueQuery(dialect, timeoutsTableName, batchSize);
 					command.AddParameter("current_time", RebusTimeMachine.Now());
 
 					using (var reader = command.ExecuteReader())
