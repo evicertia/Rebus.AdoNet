@@ -21,7 +21,7 @@ namespace Rebus.AdoNet
 		readonly AdoNetConnectionFactory factory;
 		readonly string timeoutsTableName;
 		readonly SqlDialect dialect;
-		readonly uint? limit;
+		readonly uint batchSize;
 
 		static AdoNetTimeoutStorage()
 		{
@@ -32,7 +32,7 @@ namespace Rebus.AdoNet
 		/// Constructs the timeout storage which will use the specified connection string to connect to a database,
 		/// storing the timeouts in the table with the specified name
 		/// </summary>
-		public AdoNetTimeoutStorage(AdoNetConnectionFactory factory, string timeoutsTableName) : this(factory, timeoutsTableName, null)
+		public AdoNetTimeoutStorage(AdoNetConnectionFactory factory, string timeoutsTableName) : this(factory, timeoutsTableName, 0)
 		{
 		}
 
@@ -40,12 +40,12 @@ namespace Rebus.AdoNet
 		/// Constructs the timeout storage which will use the specified connection string to connect to a database,
 		/// storing the timeouts in the table with the specified name and limit
 		/// </summary>
-		public AdoNetTimeoutStorage(AdoNetConnectionFactory factory, string timeoutsTableName, uint? limit)
+		public AdoNetTimeoutStorage(AdoNetConnectionFactory factory, string timeoutsTableName, uint batchSize)
 		{
 			this.factory = factory;
 			this.timeoutsTableName = timeoutsTableName;
 			this.dialect = factory.Dialect;
-			this.limit = limit;
+			this.batchSize = batchSize;
 		}
 
 		/// <summary>
@@ -123,7 +123,7 @@ namespace Rebus.AdoNet
 		}
 
 		#region GetDueTimeouts
-		private static string FormatGetTimeoutsDueQuery(SqlDialect dialect, string tableName, uint? limit)
+		private static string FormatGetTimeoutsDueQuery(SqlDialect dialect, string tableName, uint batchSize)
 		{
 
 			var forUpdateStmt = string.Empty;
@@ -145,9 +145,9 @@ namespace Rebus.AdoNet
 				lockPredicate = $"AND " + dialect.FormatTryAdvisoryLock(new[] { "id" });
 			}
 
-			if(limit != null)
+			if(batchSize != 0)
 			{
-				limitPredicate = "LIMIT " + limit.Value;
+				limitPredicate = "LIMIT " + batchSize;
 			}
 
 			return  $"SELECT id, time_to_return, correlation_id, saga_id, reply_to, custom_data " +
@@ -175,7 +175,7 @@ namespace Rebus.AdoNet
 				using (var command = connection.CreateCommand())
 				{
 					command.Transaction = transaction;
-					command.CommandText = FormatGetTimeoutsDueQuery(dialect, timeoutsTableName, limit);
+					command.CommandText = FormatGetTimeoutsDueQuery(dialect, timeoutsTableName, batchSize);
 					command.AddParameter("current_time", RebusTimeMachine.Now());
 
 					using (var reader = command.ExecuteReader())

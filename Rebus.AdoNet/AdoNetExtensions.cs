@@ -64,13 +64,14 @@ namespace Rebus.AdoNet
 		}
 
 		/// <summary>
-		/// Configures Rebus to store timeouts in AdoNet with limit for GetDueTimeouts.
+		/// Configures Rebus to store timeouts in AdoNet. 
+		/// Use batchSize for limit the number of timeouts that you get from database.
 		/// </summary>
-		public static AdoNetTimeoutStorageFluentConfigurer StoreInAdoNet(this RebusTimeoutsConfigurer configurer, string connectionStringName, string timeoutsTableName, uint limit)
+		public static AdoNetTimeoutStorageFluentConfigurer StoreInAdoNet(this RebusTimeoutsConfigurer configurer, string connectionStringName, string timeoutsTableName, uint batchsize)
 		{
 			var connString = GetConnectionString(connectionStringName);
 			var factory = new AdoNetConnectionFactory(connString.ConnectionString, connString.ProviderName);
-			var storage = new AdoNetTimeoutStorage(factory, timeoutsTableName, limit);
+			var storage = new AdoNetTimeoutStorage(factory, timeoutsTableName, batchsize);
 
 			configurer.Use(storage);
 
