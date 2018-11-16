@@ -64,7 +64,7 @@ namespace Rebus.AdoNet.Dialects
 
 		#region GetColumnType
 
-		private static string GetIdentityTypeFor(DbType type)
+		public override string GetIdentityTypeFor(DbType type)
 		{
 			switch (type)
 			{
@@ -73,14 +73,6 @@ namespace Rebus.AdoNet.Dialects
 				case DbType.Int64: return "bigserial";
 				default: throw new ArgumentOutOfRangeException($"Invalid identity column type: {type}");
 			}
-		}
-
-		public override string GetColumnType(DbType type, uint length, uint precision, uint scale, bool identity, bool primary)
-		{
-			var result = identity ? GetIdentityTypeFor(type)
-				: base.GetColumnType(type, length, precision, scale, identity, primary);
-
-			return result;
 		}
 
 		public override string FormatTryAdvisoryLock(IEnumerable<object> args)

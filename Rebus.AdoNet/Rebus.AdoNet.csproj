@@ -57,6 +57,7 @@
     <Compile Include="AdoNetSagaPersisterFluentConfigurer.cs" />
     <Compile Include="AdoNetUnitOfWorkManager.cs" />
     <Compile Include="AdoNetUnitOfWorkScope.cs" />
+    <Compile Include="Dialects\PostgreSql10Dialect.cs" />
     <Compile Include="Dialects\PostgreSqlDialect.cs" />
     <Compile Include="Dialects\PostgreSql91Dialect.cs" />
     <Compile Include="Dialects\PostgreSql95Dialect.cs" />
