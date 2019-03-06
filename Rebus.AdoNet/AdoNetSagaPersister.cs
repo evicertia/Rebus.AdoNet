@@ -422,6 +422,12 @@ namespace Rebus.AdoNet
 
 					try
 					{
+						return JsonConvert.DeserializeObject<TSagaData>(value, Settings);
+					}
+					catch { }
+
+					try
+					{
 						return (TSagaData)JsonConvert.DeserializeObject(value, Settings);
 					}
 					catch (Exception exception)
