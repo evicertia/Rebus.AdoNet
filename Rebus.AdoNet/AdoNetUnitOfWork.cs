@@ -14,7 +14,7 @@ namespace Rebus.AdoNet
 	internal class AdoNetUnitOfWork : IUnitOfWork
 	{
 		private static ILog _log;
-		private readonly AdoNetConnectionFactory _factory;
+		private readonly IAdoNetConnectionFactory _factory;
 		private Lazy<Tuple<IDbConnection, IDbTransaction>> __connection;
 		private bool _aborted;
 		private bool _autodispose;
@@ -33,14 +33,14 @@ namespace Rebus.AdoNet
 
 		}
 
-		public AdoNetUnitOfWork(AdoNetConnectionFactory factory, IMessageContext context)
+		public AdoNetUnitOfWork(IAdoNetConnectionFactory factory, IMessageContext context)
 		{
 			if (factory == null) throw new ArgumentNullException(nameof(factory));
 
 			_factory = factory;
 			_autodispose = context == null;
 			__connection = new Lazy<Tuple<IDbConnection, IDbTransaction>>(() => {
-				var connection = factory.OpenConnection();
+				var connection = factory.GetConnection();
 				var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted); //< We may require 'Serializable' as our default.
 				_log.Debug("Created new connection {0} and transaction {1}", connection.GetHashCode(), transaction.GetHashCode());
 				return Tuple.Create(connection, transaction);
