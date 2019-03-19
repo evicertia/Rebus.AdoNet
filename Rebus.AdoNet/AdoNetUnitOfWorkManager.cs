@@ -15,9 +15,9 @@ namespace Rebus.AdoNet
 	public class AdoNetUnitOfWorkManager : IUnitOfWorkManager
 	{
 		private const string CONTEXT_ITEM_KEY = nameof(AdoNetUnitOfWork);
-		private readonly IAdoNetConnectionFactory _factory;
+		private readonly AdoNetConnectionFactory _factory;
 
-		public AdoNetUnitOfWorkManager(IAdoNetConnectionFactory factory)
+		public AdoNetUnitOfWorkManager(AdoNetConnectionFactory factory)
 		{
 			Guard.NotNull(() => factory, factory);
 

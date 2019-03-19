@@ -12,13 +12,7 @@ using Rebus.AdoNet.Dialects;
 
 namespace Rebus.AdoNet
 {
-	public interface IAdoNetConnectionFactory
-	{
-		IDbConnection GetConnection();
-		SqlDialect Dialect { get; }
-	}
-
-	public class AdoNetConnectionFactory : IAdoNetConnectionFactory
+	public class AdoNetConnectionFactory
 	{
 		private readonly DbProviderFactory _factory;
 		private readonly string _connectionString;
@@ -38,7 +32,7 @@ namespace Rebus.AdoNet
 
 		}
 
-		public IDbConnection GetConnection()
+		public IDbConnection OpenConnection()
 		{
 			return _factory.OpenConnection(_connectionString);
 		}

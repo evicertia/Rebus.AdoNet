@@ -17,14 +17,14 @@ namespace Rebus.AdoNet
 		static ILog log;
 
 		readonly string subscriptionsTableName;
-		readonly IAdoNetConnectionFactory factory;
+		readonly AdoNetConnectionFactory factory;
 
 		static AdoNetSubscriptionStorage()
 		{
 			RebusLoggerFactory.Changed += f => log = f.GetCurrentClassLogger();
 		}
 
-		public AdoNetSubscriptionStorage(IAdoNetConnectionFactory factory, string subscriptionsTableName)
+		public AdoNetSubscriptionStorage(AdoNetConnectionFactory factory, string subscriptionsTableName)
 		{
 			this.factory = factory;
 			this.subscriptionsTableName = subscriptionsTableName;
@@ -41,7 +41,7 @@ namespace Rebus.AdoNet
 		public void Store(Type eventType, string subscriberInputQueue)
 		{
 
-			using (var connection = factory.GetConnection())
+			using (var connection = factory.OpenConnection())
 			using (var command = connection.CreateCommand())
 			{
 				const string Sql = @"insert into ""{0}"" (""message_type"", ""endpoint"") values (@message_type, @endpoint)";
@@ -70,7 +70,7 @@ namespace Rebus.AdoNet
 		{
 			const string Sql = @"delete from ""{0}"" where ""message_type"" = @message_type and ""endpoint"" = @endpoint";
 
-			using (var connection = factory.GetConnection())
+			using (var connection = factory.OpenConnection())
 			using (var command = connection.CreateCommand())
 			{
 				command.CommandText = string.Format(Sql, subscriptionsTableName);
@@ -87,7 +87,7 @@ namespace Rebus.AdoNet
 		/// </summary>
 		public string[] GetSubscribers(Type eventType)
 		{
-			using (var connection = factory.GetConnection())
+			using (var connection = factory.OpenConnection())
 			using (var command = connection.CreateCommand())
 			{
 				const string Sql = @"select ""endpoint"" from ""{0}"" where ""message_type"" = @message_type";
@@ -117,7 +117,7 @@ namespace Rebus.AdoNet
 		/// </summary>
 		public AdoNetSubscriptionStorageFluentConfigurer EnsureTableIsCreated()
 		{
-			using (var connection = factory.GetConnection())
+			using (var connection = factory.OpenConnection())
 			{
 				var tableNames = factory.Dialect.GetTableNames(connection);
 

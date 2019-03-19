@@ -18,7 +18,7 @@ namespace Rebus.AdoNet
 	{
 		static ILog log;
 
-		readonly IAdoNetConnectionFactory factory;
+		readonly AdoNetConnectionFactory factory;
 		readonly string timeoutsTableName;
 		readonly SqlDialect dialect;
 		readonly uint batchSize;
@@ -32,7 +32,7 @@ namespace Rebus.AdoNet
 		/// Constructs the timeout storage which will use the specified connection string to connect to a database,
 		/// storing the timeouts in the table with the specified name
 		/// </summary>
-		public AdoNetTimeoutStorage(IAdoNetConnectionFactory factory, string timeoutsTableName) : this(factory, timeoutsTableName, 0)
+		public AdoNetTimeoutStorage(AdoNetConnectionFactory factory, string timeoutsTableName) : this(factory, timeoutsTableName, 0)
 		{
 		}
 
@@ -40,7 +40,7 @@ namespace Rebus.AdoNet
 		/// Constructs the timeout storage which will use the specified connection string to connect to a database,
 		/// storing the timeouts in the table with the specified name and limit
 		/// </summary>
-		public AdoNetTimeoutStorage(IAdoNetConnectionFactory factory, string timeoutsTableName, uint batchSize)
+		public AdoNetTimeoutStorage(AdoNetConnectionFactory factory, string timeoutsTableName, uint batchSize)
 		{
 			this.factory = factory;
 			this.timeoutsTableName = timeoutsTableName;
@@ -61,7 +61,7 @@ namespace Rebus.AdoNet
 		/// </summary>
 		public void Add(Timeout.Timeout newTimeout)
 		{
-			using (var connection = factory.GetConnection())
+			using (var connection = factory.OpenConnection())
 			using (var command = connection.CreateCommand())
 			{
 				var parameters = new Dictionary<string, object>
@@ -169,7 +169,7 @@ namespace Rebus.AdoNet
 
 			try
 			{
-				connection = factory.GetConnection();
+				connection = factory.OpenConnection();
 				transaction = connection.BeginTransaction();
 
 				using (var command = connection.CreateCommand())
@@ -208,7 +208,7 @@ namespace Rebus.AdoNet
 		/// </summary>
 		public AdoNetTimeoutStorageFluentConfigurer EnsureTableIsCreated()
 		{
-			using (var connection = factory.GetConnection())
+			using (var connection = factory.OpenConnection())
 			{
 				var tableNames = factory.Dialect.GetTableNames(connection);
 
