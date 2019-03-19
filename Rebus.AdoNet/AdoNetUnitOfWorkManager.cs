@@ -16,12 +16,15 @@ namespace Rebus.AdoNet
 	{
 		private const string CONTEXT_ITEM_KEY = nameof(AdoNetUnitOfWork);
 		private readonly AdoNetConnectionFactory _factory;
+		private readonly Func<AdoNetConnectionFactory, IMessageContext, AdoNetUnitOfWork> _unitOfWorkCreator;
 
-		public AdoNetUnitOfWorkManager(AdoNetConnectionFactory factory)
+		public AdoNetUnitOfWorkManager(AdoNetConnectionFactory factory, Func<AdoNetConnectionFactory, IMessageContext, AdoNetUnitOfWork> unitOfWorkCreator)
 		{
 			Guard.NotNull(() => factory, factory);
+			Guard.NotNull(() => unitOfWorkCreator, unitOfWorkCreator);
 
 			_factory = factory;
+			_unitOfWorkCreator = unitOfWorkCreator;
 		}
 
 		internal static AdoNetUnitOfWork TryGetCurrent()
@@ -59,7 +62,7 @@ namespace Rebus.AdoNet
 		public IUnitOfWork Create()
 		{
 			var context = MessageContext.GetCurrent();
-			var result = new AdoNetUnitOfWork(_factory, context);
+			var result = _unitOfWorkCreator(_factory, context);
 			// Remove from context on disposal..
 			//result.OnDispose += () => context.Items.Remove(CONTEXT_ITEM_KEY);
 			context.Items.Add(CONTEXT_ITEM_KEY, result);

@@ -11,16 +11,16 @@ using Rebus.Logging;
 
 namespace Rebus.AdoNet
 {
-	internal class AdoNetUnitOfWork : IUnitOfWork
+	public class AdoNetUnitOfWork : IUnitOfWork
 	{
 		private static ILog _log;
-		private readonly AdoNetConnectionFactory _factory;
-		private Lazy<Tuple<IDbConnection, IDbTransaction>> __connection;
-		private bool _aborted;
-		private bool _autodispose;
+		protected readonly AdoNetConnectionFactory _factory;
+		protected Lazy<Tuple<IDbConnection, IDbTransaction>> __connection;
+		protected bool _aborted;
+		protected bool _autodispose;
 
-		private IDbConnection Connection => __connection?.Value.Item1;
-		private IDbTransaction Transaction => __connection?.Value.Item2;
+		protected IDbConnection Connection => __connection?.Value.Item1;
+		protected IDbTransaction Transaction => __connection?.Value.Item2;
 
 		/// <summary>
 		/// Occurs when [on dispose].
@@ -33,11 +33,15 @@ namespace Rebus.AdoNet
 
 		}
 
-		public AdoNetUnitOfWork(AdoNetConnectionFactory factory, IMessageContext context)
+		protected AdoNetUnitOfWork(AdoNetConnectionFactory factory)
 		{
 			if (factory == null) throw new ArgumentNullException(nameof(factory));
 
 			_factory = factory;
+		}
+
+		public AdoNetUnitOfWork(AdoNetConnectionFactory factory, IMessageContext context) : this(factory)
+		{
 			_autodispose = context == null;
 			__connection = new Lazy<Tuple<IDbConnection, IDbTransaction>>(() => {
 				var connection = factory.OpenConnection();
@@ -65,7 +69,7 @@ namespace Rebus.AdoNet
 			return result;
 		}
 
-		public void Abort()
+		public virtual void Abort()
 		{
 			if (Transaction == null) throw new InvalidOperationException("UnitOfWork has no active transaction?!");
 
@@ -75,7 +79,7 @@ namespace Rebus.AdoNet
 			_log.Debug("Rolled back transaction: {0}...", Transaction.GetHashCode());
 		}
 
-		public void Commit()
+		public virtual void Commit()
 		{
 			if (Transaction == null) throw new InvalidOperationException("UnitOfWork has no active transaction?!");
 
@@ -85,7 +89,7 @@ namespace Rebus.AdoNet
 		}
 
 		#region IDisposable
-		private bool _disposed = false; // To detect redundant calls
+		protected bool _disposed = false; // To detect redundant calls
 
 		protected virtual void Dispose(bool disposing)
 		{
@@ -115,7 +119,7 @@ namespace Rebus.AdoNet
 
 				__connection = null;
 
-				OnDispose();
+				RaiseOnDisposeEvent();
 			}
 
 			// XXX: Never throw exceptions from this point forward, log them instead.
@@ -143,6 +147,11 @@ namespace Rebus.AdoNet
 #if false //< uncomment the following line if the finalizer is overridden above.
 			GC.SuppressFinalize(this);
 #endif
+		}
+
+		protected void RaiseOnDisposeEvent()
+		{
+			OnDispose();
 		}
 		#endregion
 	}

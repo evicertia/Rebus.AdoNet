@@ -8,7 +8,7 @@ using Rebus.AdoNet.Dialects;
 
 namespace Rebus.AdoNet
 {
-	internal class AdoNetUnitOfWorkScope : IDisposable
+	public class AdoNetUnitOfWorkScope : IDisposable
 	{
 		private static ILog _log;
 		private bool _completed = false;
