@@ -12,13 +12,15 @@ using Rebus.AdoNet.Dialects;
 
 namespace Rebus.AdoNet
 {
+	public delegate IAdoNetUnitOfWork UOWCreatorDelegate(AdoNetConnectionFactory factory, IMessageContext context);
+
 	public class AdoNetUnitOfWorkManager : IUnitOfWorkManager
 	{
-		private const string CONTEXT_ITEM_KEY = nameof(AdoNetUnitOfWork);
+		private const string CONTEXT_ITEM_KEY = nameof(IAdoNetUnitOfWork);
 		private readonly AdoNetConnectionFactory _factory;
-		private readonly Func<AdoNetConnectionFactory, IMessageContext, AdoNetUnitOfWork> _unitOfWorkCreator;
+		private readonly UOWCreatorDelegate _unitOfWorkCreator;
 
-		public AdoNetUnitOfWorkManager(AdoNetConnectionFactory factory, Func<AdoNetConnectionFactory, IMessageContext, AdoNetUnitOfWork> unitOfWorkCreator)
+		public AdoNetUnitOfWorkManager(AdoNetConnectionFactory factory, UOWCreatorDelegate unitOfWorkCreator)
 		{
 			Guard.NotNull(() => factory, factory);
 			Guard.NotNull(() => unitOfWorkCreator, unitOfWorkCreator);
@@ -27,7 +29,7 @@ namespace Rebus.AdoNet
 			_unitOfWorkCreator = unitOfWorkCreator;
 		}
 
-		internal static AdoNetUnitOfWork TryGetCurrent()
+		internal static IAdoNetUnitOfWork TryGetCurrent()
 		{
 			object result = null;
 			var context = MessageContext.HasCurrent ? MessageContext.GetCurrent() : null;
@@ -36,7 +38,7 @@ namespace Rebus.AdoNet
 			{
 				if (context.Items.TryGetValue(CONTEXT_ITEM_KEY, out result))
 				{
-					return (AdoNetUnitOfWork)result;
+					return (IAdoNetUnitOfWork)result;
 				}
 			}
 

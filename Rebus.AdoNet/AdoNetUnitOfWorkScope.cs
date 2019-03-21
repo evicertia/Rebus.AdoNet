@@ -12,7 +12,7 @@ namespace Rebus.AdoNet
 	{
 		private static ILog _log;
 		private bool _completed = false;
-		private readonly AdoNetUnitOfWork _unitOfWork;
+		private readonly IAdoNetUnitOfWork _unitOfWork;
 
 		/// <summary>
 		/// Gets the SQL dialect of the current connection.
@@ -35,7 +35,7 @@ namespace Rebus.AdoNet
 			RebusLoggerFactory.Changed += f => _log = f.GetCurrentClassLogger();
 		}
 
-		public AdoNetUnitOfWorkScope(AdoNetUnitOfWork unitOfWork, SqlDialect dialect, IDbConnection connection)
+		public AdoNetUnitOfWorkScope(IAdoNetUnitOfWork unitOfWork, SqlDialect dialect, IDbConnection connection)
 		{
 			if (unitOfWork == null) throw new ArgumentNullException(nameof(unitOfWork));
 

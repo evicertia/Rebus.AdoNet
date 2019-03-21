@@ -35,7 +35,7 @@ namespace Rebus.AdoNet
 		/// Configures Rebus to store sagas in AdoNet.
 		/// </summary>
 		public static AdoNetSagaPersisterFluentConfigurer StoreInAdoNet(this RebusSagasConfigurer configurer, string connectionStringName, string sagaTable, string sagaIndexTable,
-			bool useSagaLocking = false, Func<AdoNetConnectionFactory, IMessageContext, AdoNetUnitOfWork> unitOfWorkCreator = null)
+			bool useSagaLocking = false, UOWCreatorDelegate unitOfWorkCreator = null)
 		{
 			if(unitOfWorkCreator == null) unitOfWorkCreator = (fact, cont) => new AdoNetUnitOfWork(fact, cont);
 
