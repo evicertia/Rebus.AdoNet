@@ -12,19 +12,24 @@ using Rebus.AdoNet.Dialects;
 
 namespace Rebus.AdoNet
 {
+	public delegate IAdoNetUnitOfWork UOWCreatorDelegate(AdoNetConnectionFactory factory, IMessageContext context);
+
 	public class AdoNetUnitOfWorkManager : IUnitOfWorkManager
 	{
-		private const string CONTEXT_ITEM_KEY = nameof(AdoNetUnitOfWork);
+		private const string CONTEXT_ITEM_KEY = nameof(IAdoNetUnitOfWork);
 		private readonly AdoNetConnectionFactory _factory;
+		private readonly UOWCreatorDelegate _unitOfWorkCreator;
 
-		public AdoNetUnitOfWorkManager(AdoNetConnectionFactory factory)
+		public AdoNetUnitOfWorkManager(AdoNetConnectionFactory factory, UOWCreatorDelegate unitOfWorkCreator)
 		{
 			Guard.NotNull(() => factory, factory);
+			Guard.NotNull(() => unitOfWorkCreator, unitOfWorkCreator);
 
 			_factory = factory;
+			_unitOfWorkCreator = unitOfWorkCreator;
 		}
 
-		internal static AdoNetUnitOfWork TryGetCurrent()
+		internal static IAdoNetUnitOfWork TryGetCurrent()
 		{
 			object result = null;
 			var context = MessageContext.HasCurrent ? MessageContext.GetCurrent() : null;
@@ -33,7 +38,7 @@ namespace Rebus.AdoNet
 			{
 				if (context.Items.TryGetValue(CONTEXT_ITEM_KEY, out result))
 				{
-					return (AdoNetUnitOfWork)result;
+					return (IAdoNetUnitOfWork)result;
 				}
 			}
 
@@ -59,7 +64,7 @@ namespace Rebus.AdoNet
 		public IUnitOfWork Create()
 		{
 			var context = MessageContext.GetCurrent();
-			var result = new AdoNetUnitOfWork(_factory, context);
+			var result = _unitOfWorkCreator(_factory, context);
 			// Remove from context on disposal..
 			//result.OnDispose += () => context.Items.Remove(CONTEXT_ITEM_KEY);
 			context.Items.Add(CONTEXT_ITEM_KEY, result);

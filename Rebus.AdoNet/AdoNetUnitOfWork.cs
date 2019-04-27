@@ -11,7 +11,12 @@ using Rebus.Logging;
 
 namespace Rebus.AdoNet
 {
-	internal class AdoNetUnitOfWork : IUnitOfWork
+	public interface IAdoNetUnitOfWork : IUnitOfWork
+	{
+		AdoNetUnitOfWorkScope GetScope();
+	}
+
+	internal class AdoNetUnitOfWork : IAdoNetUnitOfWork
 	{
 		private static ILog _log;
 		private readonly AdoNetConnectionFactory _factory;

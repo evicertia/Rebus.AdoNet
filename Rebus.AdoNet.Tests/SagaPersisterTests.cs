@@ -186,7 +186,7 @@ namespace Rebus.AdoNet
 		public void OneTimeSetup()
 		{
 			_factory = new AdoNetConnectionFactory(ConnectionString, ProviderName);
-			_manager = new AdoNetUnitOfWorkManager(_factory);
+			_manager = new AdoNetUnitOfWorkManager(_factory, (fact, cont) => new AdoNetUnitOfWork(fact, cont));
 		}
 
 
