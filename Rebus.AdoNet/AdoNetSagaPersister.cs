@@ -296,7 +296,7 @@ namespace Rebus.AdoNet
 				foreach (var parameter in parameters)
 				{
 					command.AddParameter(dialect.EscapeParameter(parameter.PropertyNameParameter), DbType.String, parameter.PropertyName);
-					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, parameter.PropertyValue);
+					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, parameter.PropertyValue ?? "");
 				}
 
 				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), DbType.String, sagaTypeName);
@@ -352,7 +352,7 @@ namespace Rebus.AdoNet
 				foreach (var parameter in parameters)
 				{
 					command.AddParameter(dialect.EscapeParameter(parameter.PropertyNameParameter), DbType.String, parameter.PropertyName);
-					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, parameter.PropertyValue);
+					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, parameter.PropertyValue ?? "");
 				}
 
 				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), DbType.String, sagaTypeName);
@@ -443,7 +443,7 @@ namespace Rebus.AdoNet
 			}
 
 			// For each exisring key, update it's value..
-			foreach (var key in existingKeys)
+			foreach (var key in existingKeys.Where(k => propertiesToIndex.Any(p => p.Key == k)))
 			{
 				using (var command = connection.CreateCommand())
 				{
@@ -464,7 +464,7 @@ namespace Rebus.AdoNet
 					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
 					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), DbType.String, sagaTypeName);
 					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN), DbType.String, key);
-					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN), DbType.String, propertiesToIndex[key]);
+					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN), DbType.String, propertiesToIndex[key] ?? "");
 
 					try
 					{
@@ -479,42 +479,42 @@ namespace Rebus.AdoNet
 
 			var removedKeys = existingKeys.Where(x => !propertiesToIndex.ContainsKey(x)).ToArray();
 
-			// Remove no longer needed keys..
-			using (var command = connection.CreateCommand())
+			if (removedKeys.Length > 0)
 			{
-				command.CommandText = string.Format(
-					"DELETE FROM {0} WHERE {1} = {2} AND {3} = {4} AND {5} IN ({6})",
-					dialect.QuoteForTableName(sagaIndexTableName),		//< 0
-					dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN), 	//< 1
-					dialect.EscapeParameter(SAGAINDEX_ID_COLUMN),		//< 2
-					dialect.QuoteForColumnName(SAGAINDEX_TYPE_COLUMN),	//< 3
-					dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN),     //< 4
-					dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),   //< 5
-					string.Join(", ", existingKeys.Select((x, i) => dialect.EscapeParameter($"k{i}")))
-				);
-
-				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
-				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), DbType.String, sagaTypeName);
-
-				for (int i = 0; i < existingKeys.Count(); i++)
+				// Remove no longer needed keys..
+				using (var command = connection.CreateCommand())
 				{
-					command.AddParameter(dialect.EscapeParameter($"k{i}"), DbType.StringFixedLength, existingKeys.ElementAt(i).Trim());
-				}
+					command.CommandText = string.Format(
+						"DELETE FROM {0} WHERE {1} = {2} AND {3} = {4} AND {5} IN ({6})",
+						dialect.QuoteForTableName(sagaIndexTableName),      //< 0
+						dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),    //< 1
+						dialect.EscapeParameter(SAGAINDEX_ID_COLUMN),       //< 2
+						dialect.QuoteForColumnName(SAGAINDEX_TYPE_COLUMN),  //< 3
+						dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN),     //< 4
+						dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),   //< 5
+						string.Join(", ", existingKeys.Select((x, i) => dialect.EscapeParameter($"k{i}")))
+					);
 
-				try
-				{
-					command.ExecuteNonQuery();
-				}
-				catch (DbException exception)
-				{
-					throw new OptimisticLockingException(sagaData, exception);
+					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
+					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), DbType.String, sagaTypeName);
+
+					for (int i = 0; i < existingKeys.Count(); i++)
+					{
+						command.AddParameter(dialect.EscapeParameter($"k{i}"), DbType.StringFixedLength, existingKeys.ElementAt(i).Trim());
+					}
+
+					try
+					{
+						command.ExecuteNonQuery();
+					}
+					catch (DbException exception)
+					{
+						throw new OptimisticLockingException(sagaData, exception);
+					}
 				}
 			}
 
-			// Insert new keys..
-			using (var command = connection.CreateCommand())
-			{
-				var parameters = propertiesToIndex
+			var parameters = propertiesToIndex
 					.Where(x => !existingKeys.Contains(x.Key))
 					.Select((p, i) => new
 					{
@@ -525,43 +525,46 @@ namespace Rebus.AdoNet
 					})
 					.ToList();
 
-				var values = string.Join(", ", parameters.Select(p => string.Format("({0}, {1}, {2}, {3})",
-					dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN),
-					dialect.EscapeParameter(p.PropertyNameParameter),
-					dialect.EscapeParameter(p.PropertyValueParameter),
-					dialect.EscapeParameter(SAGAINDEX_ID_COLUMN))));
-
-
-				command.CommandText = string.Format(
-					"INSERT INTO {0} ({1}, {2}, {3}, {4}) VALUES {5};",
-					dialect.QuoteForTableName(sagaIndexTableName),
-					dialect.QuoteForColumnName(SAGAINDEX_TYPE_COLUMN),
-					dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),
-					dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),
-					dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),
-					values);
-
-				foreach (var parameter in parameters)
+			if (parameters.Count > 0)
+			{
+				// Insert new keys..
+				using (var command = connection.CreateCommand())
 				{
-					command.AddParameter(dialect.EscapeParameter(parameter.PropertyNameParameter), DbType.String, parameter.PropertyName);
-					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, parameter.PropertyValue);
-				}
+					var values = string.Join(", ", parameters.Select(p => string.Format("({0}, {1}, {2}, {3})",
+						dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN),
+						dialect.EscapeParameter(p.PropertyNameParameter),
+						dialect.EscapeParameter(p.PropertyValueParameter),
+						dialect.EscapeParameter(SAGAINDEX_ID_COLUMN))));
 
-				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), DbType.String, sagaTypeName);
-				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
 
-				try
-				{
-					using (var reader = command.ExecuteReader())
+					command.CommandText = string.Format(
+						"INSERT INTO {0} ({1}, {2}, {3}, {4}) VALUES {5};",
+						dialect.QuoteForTableName(sagaIndexTableName),
+						dialect.QuoteForColumnName(SAGAINDEX_TYPE_COLUMN),
+						dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),
+						dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),
+						dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),
+						values);
+
+					foreach (var parameter in parameters)
 					{
-						existingKeys = reader.AsEnumerable<string>(SAGAINDEX_KEY_COLUMN).ToArray();
+						command.AddParameter(dialect.EscapeParameter(parameter.PropertyNameParameter), DbType.String, parameter.PropertyName);
+						command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, parameter.PropertyValue ?? "");
 					}
-				}
-				catch (DbException exception)
-				{
-					throw new OptimisticLockingException(sagaData, exception);
-				}
 
+					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), DbType.String, sagaTypeName);
+					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
+
+					try
+					{
+						command.ExecuteNonQuery();
+					}
+					catch (DbException exception)
+					{
+						throw new OptimisticLockingException(sagaData, exception);
+					}
+
+				}
 			}
 		}
 
