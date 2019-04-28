@@ -77,6 +77,7 @@
     <Compile Include="Reflect.cs" />
     <Compile Include="IDbExtensions.cs" />
     <Compile Include="Dialects\SqlDialect.cs" />
+    <Compile Include="Dialects\PostgreSql82Dialect.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
