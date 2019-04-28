@@ -504,5 +504,9 @@ namespace Rebus.AdoNet.Dialects
 		}
 
 		#endregion
+
+		#region Common Table Expressions
+		public virtual bool SupportsTableExpressions => false;
+		#endregion
 	}
 }
