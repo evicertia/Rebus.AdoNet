@@ -131,10 +131,11 @@ namespace Rebus.AdoNet
 								new AdoNetColumn() { Name = SAGAINDEX_VALUE_COLUMN, DbType = DbType.StringFixedLength, Length = 200 },
 								new AdoNetColumn() { Name = SAGAINDEX_ID_COLUMN, DbType = DbType.Guid }
 							},
-							PrimaryKey = new[] { SAGAINDEX_KEY_COLUMN, SAGAINDEX_VALUE_COLUMN, SAGAINDEX_TYPE_COLUMN },
+							PrimaryKey = new[] { SAGAINDEX_KEY_COLUMN, SAGAINDEX_VALUE_COLUMN, SAGAINDEX_ID_COLUMN },
 							Indexes = new []
 							{
-								new AdoNetIndex() { Name = "ix_saga_id", Columns = new[] { SAGAINDEX_ID_COLUMN } }
+								new AdoNetIndex() { Name = "ix_saga_id", Columns = new[] { SAGAINDEX_ID_COLUMN } },
+								new AdoNetIndex() { Name = "ix_sagaindexes_id_type_key", Columns = new[] { SAGAINDEX_ID_COLUMN, SAGAINDEX_TYPE_COLUMN, SAGAINDEX_KEY_COLUMN } }
 							}
 						}
 					);
@@ -217,19 +218,6 @@ namespace Rebus.AdoNet
 				var connection = scope.Connection;
 				var tableNames = scope.GetTableNames();
 
-				// first, delete existing index
-				using (var command = connection.CreateCommand())
-				{
-					command.CommandText = string.Format(
-						@"DELETE FROM {0} WHERE {1} = {2};",
-						dialect.QuoteForTableName(sagaIndexTableName),
-						dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),
-						dialect.EscapeParameter(SAGAINDEX_ID_COLUMN)
-					);
-					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), sagaData.Id);
-					command.ExecuteNonQuery();
-				}
-
 				// next, update or insert the saga
 				using (var command = connection.CreateCommand())
 				{
@@ -281,44 +269,122 @@ namespace Rebus.AdoNet
 				})
 				.ToList();
 
-			// lastly, generate new index
-			using (var command = connection.CreateCommand())
+			var values = string.Join(", ", parameters.Select(p => string.Format("({0}, {1}, {2}, {3})",
+						dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN),
+						dialect.EscapeParameter(p.PropertyNameParameter),
+						dialect.EscapeParameter(p.PropertyValueParameter),
+						dialect.EscapeParameter(SAGAINDEX_ID_COLUMN))));
+
+			if (dialect.SupportsTableExpressions)
 			{
-				// generate batch insert with SQL for each entry in the index
-				var inserts = parameters
-					.Select(a => string.Format(
-							@"insert into {0} ({1}, {2}, {3}, {4}) values ({5}, {6}, {7}, {8})",
-							dialect.QuoteForTableName(sagaIndexTableName),
-							dialect.QuoteForColumnName(SAGAINDEX_TYPE_COLUMN),
-							dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),
-							dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),
-							dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),
-							dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN),
-							dialect.EscapeParameter(a.PropertyNameParameter),
-							dialect.EscapeParameter(a.PropertyValueParameter),
-							dialect.EscapeParameter(SAGAINDEX_ID_COLUMN)
-						));
-
-				var sql = string.Join(";" + Environment.NewLine, inserts);
-
-				command.CommandText = sql;
-
-				foreach (var parameter in parameters)
+				using (var command = connection.CreateCommand())
 				{
-					command.AddParameter(dialect.EscapeParameter(parameter.PropertyNameParameter), DbType.String, parameter.PropertyName);
-					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, parameter.PropertyValue);
+					command.CommandText = string.Format(
+						"WITH rebusexistingkeys AS " +
+							"(INSERT INTO {0} ({1}, {2}, {3}, {4}) VALUES {5} " +
+							"ON CONFLICT ({2}, {1}, {4}) DO UPDATE SET {3} = excluded.{3} " +
+							"RETURNING {2}) " +
+						"DELETE FROM {0} " +
+						"WHERE {4} = {6} AND {2} NOT IN " +
+						"(SELECT {2} FROM rebusexistingkeys)",
+						dialect.QuoteForTableName(sagaIndexTableName),
+						dialect.QuoteForColumnName(SAGAINDEX_TYPE_COLUMN),
+						dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),
+						dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),
+						dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),
+						values,
+						dialect.EscapeParameter(SAGAINDEX_ID_COLUMN));
+
+					foreach (var parameter in parameters)
+					{
+						command.AddParameter(dialect.EscapeParameter(parameter.PropertyNameParameter), DbType.String, parameter.PropertyName);
+						command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, parameter.PropertyValue);
+					}
+
+					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), DbType.String, sagaTypeName);
+					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
+
+					try
+					{
+						command.ExecuteNonQuery();
+					}
+					catch (DbException exception)
+					{
+						throw new OptimisticLockingException(sagaData, exception);
+					}
+				}
+			}
+			else
+			{
+				var existingKeys = new List<string>();
+
+				using (var command = connection.CreateCommand())
+				{
+					command.CommandText = string.Format(
+						"INSERT INTO {0} ({1}, {2}, {3}, {4}) VALUES {5} " +
+							"ON CONFLICT ({2}, {1}, {4}) DO UPDATE SET {3} = excluded.{3} " +
+							"RETURNING {2}",
+						dialect.QuoteForTableName(sagaIndexTableName),
+						dialect.QuoteForColumnName(SAGAINDEX_TYPE_COLUMN),
+						dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),
+						dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),
+						dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),
+						values);
+
+					foreach (var parameter in parameters)
+					{
+						command.AddParameter(dialect.EscapeParameter(parameter.PropertyNameParameter), DbType.String, parameter.PropertyName);
+						command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, parameter.PropertyValue);
+					}
+
+					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), DbType.String, sagaTypeName);
+					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
+
+					try
+					{
+						using (var reader = command.ExecuteReader())
+						{
+							while (reader.Read())
+							{
+								existingKeys.Add((string)reader[SAGAINDEX_KEY_COLUMN]);
+							}
+						}
+					}
+					catch (DbException exception)
+					{
+						throw new OptimisticLockingException(sagaData, exception);
+					}
 				}
 
-				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), DbType.String, sagaTypeName);
-				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
+				var idx = 0;
+				using (var command = connection.CreateCommand())
+				{
+					command.CommandText = string.Format(
+						"DELETE FROM {0} " +
+						"WHERE {1} = {2} AND {3} NOT IN " +
+						"({4})",
+	
+						dialect.QuoteForTableName(sagaIndexTableName),
+						dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),
+						dialect.EscapeParameter(SAGAINDEX_ID_COLUMN),
+						dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),
+						string.Join(", ", existingKeys.Select(k => dialect.EscapeParameter($"k{idx++}"))));
 
-				try
-				{
-					command.ExecuteNonQuery();
-				}
-				catch (DbException exception)
-				{
-					throw new OptimisticLockingException(sagaData, exception);
+					for(int i = 0; i < existingKeys.Count; i++)
+					{
+						command.AddParameter(dialect.EscapeParameter($"k{i}"), DbType.StringFixedLength, existingKeys.ElementAt(i).Trim());
+					}
+
+					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
+
+					try
+					{
+						command.ExecuteNonQuery();
+					}
+					catch (DbException exception)
+					{
+						throw new OptimisticLockingException(sagaData, exception);
+					}
 				}
 			}
 		}
