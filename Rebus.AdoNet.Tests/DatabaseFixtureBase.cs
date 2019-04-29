@@ -5,8 +5,9 @@ using System.Linq;
 using System.Data;
 using System.Data.Common;
 
-using NUnit.Framework;
 using Common.Logging;
+
+using NUnit.Framework;
 
 using Rebus.Configuration;
 using Rebus.AdoNet.Dialects;
@@ -14,28 +15,28 @@ using Rebus.AdoNet.Schema;
 
 namespace Rebus.AdoNet
 {
-	public abstract class DatabaseFixtureBase : FixtureBase,  IDetermineMessageOwnership
+	public abstract class DatabaseFixtureBase : FixtureBase, IDetermineMessageOwnership
 	{
 		private static readonly ILog _Log = LogManager.GetLogger<DatabaseFixtureBase>();
 
 		private const string CONNECTION_STRING = @"Data Source={0};Version=3;New=True;";
-		
+
 		protected string ConnectionString { get; }
 		protected string ProviderName { get; }
 		protected DbProviderFactory Factory { get; }
 		protected SqlDialect Dialect { get; }
 
-		protected DatabaseFixtureBase()
+		protected DatabaseFixtureBase(string provider, string connectionString)
 		{
-			ConnectionString = GetConnectionString();
-			ProviderName = GetProviderName();
+			ProviderName = provider;
+			ConnectionString = connectionString;
 			Factory = DbProviderFactories.GetFactory(ProviderName);
 			Dialect = GetDialect();
 
 			if (Dialect == null) throw new InvalidOperationException($"No valid dialect detected for: {ProviderName}");
 		}
 
-		private static string GetProviderName()
+		private static string GetSqliteProviderName()
 		{
 			switch (Environment.OSVersion.Platform)
 			{
@@ -45,12 +46,24 @@ namespace Rebus.AdoNet
 			}
 		}
 
-		private static string GetConnectionString()
+		private static string GetSqliteConnectionString()
 		{
 			var dbfile = AssemblyFixture.TrackDisposable(new TempFile());
 			File.Delete(dbfile.Path);
 			_Log.DebugFormat("Using temporal file: {0}", dbfile.Path);
 			return string.Format(CONNECTION_STRING, dbfile.Path);
+		}
+
+		private static string GetPostgresConnectionString()
+		{
+			// AppVeyor's default credentials..
+			return "User ID=postgres;Password=Password12!;Host=localhost;Port=5432;Database=test;Pooling=true;";
+		}
+
+		public static IEnumerable<object[]> ConnectionSources()
+		{
+			yield return new[] { GetSqliteProviderName(), GetSqliteConnectionString() };
+			yield return new[] { "Npgsql", GetPostgresConnectionString() };
 		}
 
 		private SqlDialect GetDialect()

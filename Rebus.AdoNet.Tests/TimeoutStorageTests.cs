@@ -6,7 +6,7 @@ using NUnit.Framework;
 
 namespace Rebus.AdoNet
 {
-	[TestFixture]
+	[TestFixtureSource(typeof(DatabaseFixtureBase), nameof(DatabaseFixtureBase.ConnectionSources))]
 	public class TimeoutStorageTests : DatabaseFixtureBase
 	{
 		private static readonly ILog _Log = LogManager.GetLogger<SagaPersisterTests>();
@@ -14,6 +14,11 @@ namespace Rebus.AdoNet
 
 		private AdoNetConnectionFactory _factory;
 		private AdoNetTimeoutStorage _storage;
+
+		public TimeoutStorageTests(string provider, string connectionString)
+			: base(provider, connectionString)
+		{
+		}
 
 		[OneTimeSetUp]
 		public void OneTimeSetup()
