@@ -24,7 +24,6 @@ namespace Rebus.AdoNet
 		private const string SAGA_TYPE_COLUMN = "saga_type";
 		private const string SAGA_DATA_COLUMN = "data";
 		private const string SAGA_REVISION_COLUMN = "revision";
-		private const string SAGAINDEX_TYPE_COLUMN = "saga_type";
 		private const string SAGAINDEX_KEY_COLUMN = "key";
 		private const string SAGAINDEX_VALUE_COLUMN = "value";
 		private const string SAGAINDEX_ID_COLUMN = "saga_id";
@@ -134,7 +133,6 @@ namespace Rebus.AdoNet
 							Name = sagaIndexTableName,
 							Columns = new []
 							{
-								new AdoNetColumn() { Name = SAGAINDEX_TYPE_COLUMN, DbType = DbType.StringFixedLength, Length = 80 },
 								new AdoNetColumn() { Name = SAGAINDEX_KEY_COLUMN, DbType = DbType.StringFixedLength, Length = 200  },
 								new AdoNetColumn() { Name = SAGAINDEX_VALUE_COLUMN, DbType = DbType.StringFixedLength, Length = 200 },
 								new AdoNetColumn() { Name = SAGAINDEX_ID_COLUMN, DbType = DbType.Guid }
@@ -277,9 +275,8 @@ namespace Rebus.AdoNet
 				.ToList();
 
 			var values = parameters
-				.Select(p => string.Format("({0}, {1}, {2}, {3})",
+				.Select(p => string.Format("({0}, {1}, {2})",
 					dialect.EscapeParameter(SAGAINDEX_ID_COLUMN),
-					dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN),
 					dialect.EscapeParameter(p.PropertyNameParameter),
 					dialect.EscapeParameter(p.PropertyValueParameter)
 				));
@@ -288,18 +285,17 @@ namespace Rebus.AdoNet
 			{
 				command.CommandText = string.Format(
 					"WITH existing AS (" +
-						"INSERT INTO {0} ({1}, {2}, {3}, {4}) VALUES {6} " +
-						"ON CONFLICT ({1}, {3}) DO UPDATE SET {4} = excluded.{4} " +
-						"RETURNING {3}) " +
+						"INSERT INTO {0} ({1}, {2}, {3}) VALUES {5} " +
+						"ON CONFLICT ({1}, {2}) DO UPDATE SET {3} = excluded.{3} " +
+						"RETURNING {2}) " +
 					"DELETE FROM {0} " +
-					"WHERE {1} = {5} AND {3} NOT IN (SELECT {3} FROM existing);",
+					"WHERE {1} = {4} AND {2} NOT IN (SELECT {2} FROM existing);",
 					dialect.QuoteForTableName(sagaIndexTableName),      //< 0
 					dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),    //< 1
-					dialect.QuoteForColumnName(SAGAINDEX_TYPE_COLUMN),	//< 2
-					dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),	//< 3
-					dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),	//< 4
-					dialect.EscapeParameter(SAGAINDEX_ID_COLUMN),		//< 5
-					string.Join(", ", values)							//< 6
+					dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),	//< 2
+					dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),	//< 3
+					dialect.EscapeParameter(SAGAINDEX_ID_COLUMN),		//< 4
+					string.Join(", ", values)							//< 5
 				);
 
 				foreach (var parameter in parameters)
@@ -309,7 +305,6 @@ namespace Rebus.AdoNet
 				}
 
 				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
-				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), DbType.String, sagaTypeName);
 
 				try
 				{
@@ -340,9 +335,8 @@ namespace Rebus.AdoNet
 				.ToList();
 
 			var values = parameters
-				.Select(p => string.Format("({0}, {1}, {2}, {3})",
+				.Select(p => string.Format("({0}, {1}, {2})",
 					dialect.EscapeParameter(SAGAINDEX_ID_COLUMN),
-					dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN),
 					dialect.EscapeParameter(p.PropertyNameParameter),
 					dialect.EscapeParameter(p.PropertyValueParameter)
 				));
@@ -350,15 +344,14 @@ namespace Rebus.AdoNet
 			using (var command = connection.CreateCommand())
 			{
 				command.CommandText = string.Format(
-					"INSERT INTO {0} ({1}, {2}, {3}, {4}) VALUES {5} " +
-						"ON CONFLICT ({1}, {3}) DO UPDATE SET {4} = excluded.{4} " +
-						"RETURNING {3};",
+					"INSERT INTO {0} ({1}, {2}, {3}) VALUES {4} " +
+						"ON CONFLICT ({1}, {2}) DO UPDATE SET {3} = excluded.{3} " +
+						"RETURNING {2};",
 					dialect.QuoteForTableName(sagaIndexTableName),		//< 0
 					dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),	//< 1
-					dialect.QuoteForColumnName(SAGAINDEX_TYPE_COLUMN),	//< 2
-					dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),	//< 3
-					dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),	//< 4
-					string.Join(", ", values)							//< 5
+					dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),	//< 2
+					dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),	//< 3
+					string.Join(", ", values)							//< 4
 				);
 
 				foreach (var parameter in parameters)
@@ -368,7 +361,6 @@ namespace Rebus.AdoNet
 				}
 
 				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
-				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), DbType.String, sagaTypeName);
 
 				try
 				{
@@ -402,7 +394,6 @@ namespace Rebus.AdoNet
 				}
 
 				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
-				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), DbType.String, sagaTypeName);
 
 				try
 				{
@@ -531,22 +522,20 @@ namespace Rebus.AdoNet
 				// Insert new keys..
 				using (var command = connection.CreateCommand())
 				{
-					var values = parameters.Select(p => string.Format("({0}, {1}, {2}, {3})",
+					var values = parameters.Select(p => string.Format("({0}, {1}, {2})",
 						dialect.EscapeParameter(SAGAINDEX_ID_COLUMN),
-						dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN),
 						dialect.EscapeParameter(p.PropertyNameParameter),
 						dialect.EscapeParameter(p.PropertyValueParameter)
 					));
 
 
 					command.CommandText = string.Format(
-						"INSERT INTO {0} ({1}, {2}, {3}, {4}) VALUES {5};",
+						"INSERT INTO {0} ({1}, {2}, {3}) VALUES {4};",
 						dialect.QuoteForTableName(sagaIndexTableName),      //< 0
 						dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),	//< 1
-						dialect.QuoteForColumnName(SAGAINDEX_TYPE_COLUMN),	//< 2
-						dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),	//< 3
-						dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),	//< 4
-						string.Join(", ", values)							//< 5
+						dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),	//< 2
+						dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),	//< 3
+						string.Join(", ", values)							//< 4
 					);
 
 					foreach (var parameter in parameters)
@@ -556,7 +545,6 @@ namespace Rebus.AdoNet
 					}
 
 					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
-					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_TYPE_COLUMN), DbType.String, sagaTypeName);
 
 					try
 					{
@@ -644,8 +632,6 @@ namespace Rebus.AdoNet
 
 		public TSagaData Find<TSagaData>(string sagaDataPropertyPath, object fieldFromMessage) where TSagaData : class, ISagaData
 		{
-			// FIXME: Skip filtering by saga-data, and instead let deserialization try to match returned data to TSagaData. (pruiz)
-
 			using (var scope = manager.GetScope(autocomplete: true))
 			{
 				var dialect = scope.Dialect;
@@ -670,11 +656,9 @@ namespace Rebus.AdoNet
 						var sagaTypeParam = dialect.EscapeParameter(SAGA_TYPE_COLUMN);
 
 						command.CommandText = string.Format(
-							@"SELECT s.{0} FROM {1} s WHERE s.{2} = {3} AND s.{4} = {5} {6}",
+							@"SELECT s.{0} FROM {1} s WHERE s.{2} = {3} {4}",
 							dialect.QuoteForColumnName(SAGA_DATA_COLUMN),
 							dialect.QuoteForTableName(sagaTableName),
-							dialect.QuoteForColumnName(SAGA_TYPE_COLUMN),
-							sagaTypeParam,
 							dialect.QuoteForColumnName(SAGA_ID_COLUMN),
 							idParam,
 							GetSagaLockingClause(dialect)
@@ -688,17 +672,15 @@ namespace Rebus.AdoNet
 							@"SELECT s.{0} " +
 							@"FROM {1} s " +
 							@"JOIN {2} i on s.{3} = i.{4} " +
-							@"WHERE s.{5} = {6} AND i.{7} = {8} AND i.{9} = {10} {11}",
+							@"WHERE s.{5} = {6} AND i.{7} = {8} {9}",
 							dialect.QuoteForColumnName(SAGA_DATA_COLUMN),
 							dialect.QuoteForTableName(sagaTableName),
 							dialect.QuoteForTableName(sagaIndexTableName),
 							dialect.QuoteForColumnName(SAGA_ID_COLUMN), dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),
-							dialect.QuoteForColumnName(SAGA_TYPE_COLUMN), dialect.EscapeParameter(SAGA_TYPE_COLUMN),
 							dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN), dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN),
 							dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN), dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN),
 							GetSagaLockingClause(dialect)
 						);
-						command.AddParameter(dialect.EscapeParameter(SAGA_TYPE_COLUMN), sagaType);
 						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN), sagaDataPropertyPath);
 						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN), (fieldFromMessage ?? "").ToString());
 					}
