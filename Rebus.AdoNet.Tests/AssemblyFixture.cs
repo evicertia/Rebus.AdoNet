@@ -1,8 +1,12 @@
-﻿using System;
+﻿extern alias sqlitewin;
+extern alias sqlitemac;
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Common.Logging;
 using Common.Logging.Simple;
+
 using NUnit.Framework;
 
 namespace Rebus.AdoNet
@@ -20,7 +24,8 @@ namespace Rebus.AdoNet
 			_log = LogManager.GetLogger<AssemblyFixture>();
 
 			// Ensure runtime dependency on csharp-sqlite assembly.
-			_log.InfoFormat("Using SQLite Ado.Net provider version: {0}", typeof(System.Data.SQLite.SQLiteFactory).AssemblyQualifiedName);
+			_log.InfoFormat("Using SQLite Ado.Net (win) provider version: {0}", typeof(sqlitewin::System.Data.SQLite.SQLiteFactory).AssemblyQualifiedName);
+			_log.InfoFormat("Using SQLite Ado.Net (mac) provider version: {0}", typeof(sqlitemac::System.Data.SQLite.SQLiteFactory).AssemblyQualifiedName);
 		}
 
 		[OneTimeTearDown]
