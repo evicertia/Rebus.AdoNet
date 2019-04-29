@@ -87,8 +87,13 @@
     <Reference Include="System.Data.SQLite, Version=1.0.102.0, Culture=neutral, PublicKeyToken=db937bc2d44ff139, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Data.SQLite.Core.1.0.102.0\lib\net45\System.Data.SQLite.dll</HintPath>
       <Private>True</Private>
+      <Aliases>sqlitewin</Aliases>
     </Reference>
     <Reference Include="System.Xml" />
+    <Reference Include="System.Data.SQLite.Mac">
+      <HintPath>..\packages\System.Data.SQLite.Mac.1.0.104.2\lib\net45\System.Data.SQLite.Mac.dll</HintPath>
+      <Aliases>sqlitemac</Aliases>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="DisposableTracker.cs" />
@@ -105,6 +110,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <None Include="packages.config" />
+    <None Include="libsqlite3.dylib" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Rebus.AdoNet\Rebus.AdoNet.csproj">

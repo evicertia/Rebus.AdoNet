@@ -18,7 +18,6 @@ namespace Rebus.AdoNet
 	{
 		private static readonly ILog _Log = LogManager.GetLogger<DatabaseFixtureBase>();
 
-		private const string PROVIDER_NAME = "System.Data.SQLite";
 		private const string CONNECTION_STRING = @"Data Source={0};Version=3;New=True;";
 		
 		protected string ConnectionString { get; }
@@ -29,11 +28,21 @@ namespace Rebus.AdoNet
 		protected DatabaseFixtureBase()
 		{
 			ConnectionString = GetConnectionString();
-			ProviderName = PROVIDER_NAME;
+			ProviderName = GetProviderName();
 			Factory = DbProviderFactories.GetFactory(ProviderName);
 			Dialect = GetDialect();
 
 			if (Dialect == null) throw new InvalidOperationException($"No valid dialect detected for: {ProviderName}");
+		}
+
+		private static string GetProviderName()
+		{
+			switch (Environment.OSVersion.Platform)
+			{
+				case PlatformID.Unix: return "System.Data.SQLite.Mac"; //< OSX can report Unix too.
+				case PlatformID.MacOSX: return "System.Data.SQLite.Mac";
+				default: return "System.Data.SQLite";
+			}
 		}
 
 		private static string GetConnectionString()
