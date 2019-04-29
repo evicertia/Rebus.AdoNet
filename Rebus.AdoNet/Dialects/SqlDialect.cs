@@ -465,6 +465,14 @@ namespace Rebus.AdoNet.Dialects
 		}
 		#endregion
 
+		#region Common Table Expressions
+		public virtual bool SupportsTableExpressions => false;
+		#endregion
+
+		#region Returning Clause
+		public virtual bool SupportsReturningClause => false;
+		#endregion
+
 		#region SqlDialects Registry
 
 		private static readonly IList<SqlDialect> _dialects =

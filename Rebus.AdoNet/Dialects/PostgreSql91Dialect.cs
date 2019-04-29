@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 
 namespace Rebus.AdoNet.Dialects
 {
-	public class PostgreSql91Dialect : PostgreSqlDialect
+	public class PostgreSql91Dialect : PostgreSql82Dialect
 	{
 		private Version MinimumDatabaseVersion => new Version("9.1");
 

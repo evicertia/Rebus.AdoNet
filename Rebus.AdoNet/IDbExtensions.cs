@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -65,6 +65,27 @@ namespace Rebus.AdoNet
 			param.Value = value;
 			param.DbType = type.GetValueOrDefault(param.DbType);
 			command.Parameters.Add(param);
+		}
+		#endregion
+
+		#region IDataReader Extensions
+		// Enumerates through the reads in an IDataReader.
+		public static IEnumerable<IDataRecord> AsEnumerable(this IDataReader reader)
+		{
+			while (reader.Read())
+			{
+				yield return reader;
+			}
+		}
+
+		// Enumerates through the reads in an IDataReader.
+		public static IEnumerable<T> AsEnumerable<T>(this IDataReader reader, string col)
+			where T : IConvertible
+		{
+			while (reader.Read())
+			{
+				yield return (T)reader[col];
+			}
 		}
 		#endregion
 	}

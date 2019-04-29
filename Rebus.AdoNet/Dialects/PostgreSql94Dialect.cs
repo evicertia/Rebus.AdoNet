@@ -3,14 +3,12 @@ using System.Data;
 
 namespace Rebus.AdoNet.Dialects
 {
-	public class PostgreSql95Dialect : PostgreSql94Dialect
+	public class PostgreSql94Dialect : PostgreSql91Dialect
 	{
-		private Version MinimumDatabaseVersion => new Version("9.5");
+		private Version MinimumDatabaseVersion => new Version("9.4");
+		public override ushort Priority => 94;
 
-		public override bool SupportsSkipLockedFunction => true;
-		public override string ParameterSkipLocked => "SKIP LOCKED";
-		public override string ParameterSelectForUpdate => "FOR UPDATE";
-		public override ushort Priority => 95;
+		public override bool SupportsTableExpressions => true;
 
 		public override bool SupportsThisDialect(IDbConnection connection)
 		{
