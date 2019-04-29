@@ -15,7 +15,7 @@ using Rebus.Shared;
 
 namespace Rebus.AdoNet
 {
-	[TestFixture]
+	[TestFixtureSource(typeof(DatabaseFixtureBase), nameof(DatabaseFixtureBase.ConnectionSources))]
 	public class SagaPersisterTests : DatabaseFixtureBase
 	{
 		#region Inner Types
@@ -114,6 +114,11 @@ namespace Rebus.AdoNet
 		private AdoNetUnitOfWorkManager _manager;
 		private const string SagaTableName = "Sagas";
 		private const string SagaIndexTableName = "SagasIndex";
+
+		public SagaPersisterTests(string provider, string connectionString)
+			: base(provider, connectionString)
+		{
+		}
 
 		#region Message Context Helpers
 
