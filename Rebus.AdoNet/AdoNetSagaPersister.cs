@@ -640,21 +640,21 @@ namespace Rebus.AdoNet
 					if (sagaDataPropertyPath == idPropertyName)
 					{
 						var id = (fieldFromMessage is Guid) ? (Guid)fieldFromMessage : Guid.Parse(fieldFromMessage.ToString());
-						var parameter = dialect.EscapeParameter("value");
-						var sagaTypeColumn = dialect.EscapeParameter(SAGA_TYPE_COLUMN);
+						var idParam = dialect.EscapeParameter("id");
+						var sagaTypeParam = dialect.EscapeParameter(SAGA_TYPE_COLUMN);
 
 						command.CommandText = string.Format(
 							@"SELECT s.{0} FROM {1} s WHERE s.{2} = {3} AND s.{4} = {5} {6}",
 							dialect.QuoteForColumnName(SAGA_DATA_COLUMN),
 							dialect.QuoteForTableName(sagaTableName),
 							dialect.QuoteForColumnName(SAGA_TYPE_COLUMN),
-							sagaType,
+							sagaTypeParam,
 							dialect.QuoteForColumnName(SAGA_ID_COLUMN),
-							parameter,
+							idParam,
 							useSagaLocking ? dialect.ParameterSelectForUpdate : string.Empty
 						);
-						command.AddParameter(sagaTypeColumn, sagaType);
-						command.AddParameter(parameter, id);
+						command.AddParameter(sagaTypeParam, sagaType);
+						command.AddParameter(idParam, id);
 					}
 					else
 					{
