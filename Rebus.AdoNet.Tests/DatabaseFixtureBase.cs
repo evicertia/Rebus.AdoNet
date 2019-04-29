@@ -57,7 +57,7 @@ namespace Rebus.AdoNet
 		private static string GetPostgresConnectionString()
 		{
 			// AppVeyor's default credentials..
-			return "User ID=postgres;Password=Password12!;Host=localhost;Port=5432;Database=test;Pooling=true;Max Pool Size=100;Connection Lifetime=0;";
+			return "User ID=postgres;Password=Password12!;Host=localhost;Port=5432;Database=test;Pooling=true;";
 		}
 
 		public static IEnumerable<object[]> ConnectionSources()
