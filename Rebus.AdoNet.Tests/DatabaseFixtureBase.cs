@@ -63,7 +63,7 @@ namespace Rebus.AdoNet
 		public static IEnumerable<object[]> ConnectionSources()
 		{
 			yield return new[] { GetSqliteProviderName(), GetSqliteConnectionString() };
-			yield return new[] { "Npsql", GetPostgresConnectionString() };
+			yield return new[] { "Npgsql", GetPostgresConnectionString() };
 		}
 
 		private SqlDialect GetDialect()
