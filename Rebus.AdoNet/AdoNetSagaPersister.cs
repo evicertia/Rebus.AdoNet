@@ -125,9 +125,9 @@ namespace Rebus.AdoNet
 							Name = sagaIndexTableName,
 							Columns = new []
 							{
+								new AdoNetColumn() { Name = SAGAINDEX_ID_COLUMN, DbType = DbType.Guid },
 								new AdoNetColumn() { Name = SAGAINDEX_KEY_COLUMN, DbType = DbType.StringFixedLength, Length = 200  },
-								new AdoNetColumn() { Name = SAGAINDEX_VALUE_COLUMN, DbType = DbType.StringFixedLength, Length = 200 },
-								new AdoNetColumn() { Name = SAGAINDEX_ID_COLUMN, DbType = DbType.Guid }
+								new AdoNetColumn() { Name = SAGAINDEX_VALUE_COLUMN, DbType = DbType.StringFixedLength, Length = 200 }
 							},
 							PrimaryKey = new[] { SAGAINDEX_ID_COLUMN, SAGAINDEX_KEY_COLUMN  },
 							Indexes = new []
@@ -646,7 +646,7 @@ namespace Rebus.AdoNet
 							@"SELECT s.{0} " +
 							@"FROM {1} s " +
 							@"JOIN {2} i on s.{3} = i.{4} " +
-							@"WHERE s.{5} = {6} AND i.{7} = {8} {9}",
+							@"WHERE i.{5} = {6} AND i.{7} = {8} {9}",
 							dialect.QuoteForColumnName(SAGA_DATA_COLUMN),
 							dialect.QuoteForTableName(sagaTableName),
 							dialect.QuoteForTableName(sagaIndexTableName),
