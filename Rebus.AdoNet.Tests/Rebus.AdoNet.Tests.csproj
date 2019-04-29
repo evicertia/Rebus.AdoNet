@@ -94,6 +94,9 @@
       <HintPath>..\packages\System.Data.SQLite.Mac.1.0.104.2\lib\net45\System.Data.SQLite.Mac.dll</HintPath>
       <Aliases>sqlitemac</Aliases>
     </Reference>
+    <Reference Include="Npgsql">
+      <HintPath>..\packages\Npgsql.3.0.3\lib\net45\Npgsql.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="DisposableTracker.cs" />

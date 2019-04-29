@@ -23,9 +23,10 @@ namespace Rebus.AdoNet
 			LogManager.Adapter = new ConsoleOutLoggerFactoryAdapter(LogLevel.All, true, true, true, null);
 			_log = LogManager.GetLogger<AssemblyFixture>();
 
-			// Ensure runtime dependency on csharp-sqlite assembly.
+			// Ensure runtime dependency on ado.net providers...
 			_log.InfoFormat("Using SQLite Ado.Net (win) provider version: {0}", typeof(sqlitewin::System.Data.SQLite.SQLiteFactory).AssemblyQualifiedName);
 			_log.InfoFormat("Using SQLite Ado.Net (mac) provider version: {0}", typeof(sqlitemac::System.Data.SQLite.SQLiteFactory).AssemblyQualifiedName);
+			_log.InfoFormat("Using PostgreSql provider version: {0}", typeof(Npgsql.NpgsqlFactory).AssemblyQualifiedName);
 		}
 
 		[OneTimeTearDown]
