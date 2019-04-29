@@ -28,8 +28,8 @@ namespace Rebus.AdoNet
 
 		protected DatabaseFixtureBase(string provider, string connectionString)
 		{
-			ConnectionString = GetSqliteConnectionString();
-			ProviderName = GetSqliteProviderName();
+			ProviderName = provider;
+			ConnectionString = connectionString;
 			Factory = DbProviderFactories.GetFactory(ProviderName);
 			Dialect = GetDialect();
 
