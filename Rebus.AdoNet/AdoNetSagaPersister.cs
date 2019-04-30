@@ -108,7 +108,7 @@ namespace Rebus.AdoNet
 							Columns = new []
 							{
 								new AdoNetColumn() { Name = SAGA_ID_COLUMN, DbType = DbType.Guid },
-								new AdoNetColumn() { Name = SAGA_TYPE_COLUMN, DbType = DbType.StringFixedLength, Length = 40 },
+								new AdoNetColumn() { Name = SAGA_TYPE_COLUMN, DbType = DbType.StringFixedLength, Length = 80 },
 								new AdoNetColumn() { Name = SAGA_REVISION_COLUMN, DbType = DbType.Int32 },
 								new AdoNetColumn() { Name = SAGA_DATA_COLUMN, DbType = DbType.String, Length = 1073741823}
 							},
@@ -126,7 +126,7 @@ namespace Rebus.AdoNet
 							Name = sagaIndexTableName,
 							Columns = new []
 							{
-								new AdoNetColumn() { Name = SAGAINDEX_TYPE_COLUMN, DbType = DbType.StringFixedLength, Length = 40 },
+								new AdoNetColumn() { Name = SAGAINDEX_TYPE_COLUMN, DbType = DbType.StringFixedLength, Length = 80 },
 								new AdoNetColumn() { Name = SAGAINDEX_KEY_COLUMN, DbType = DbType.StringFixedLength, Length = 200  },
 								new AdoNetColumn() { Name = SAGAINDEX_VALUE_COLUMN, DbType = DbType.StringFixedLength, Length = 200 },
 								new AdoNetColumn() { Name = SAGAINDEX_ID_COLUMN, DbType = DbType.Guid }
