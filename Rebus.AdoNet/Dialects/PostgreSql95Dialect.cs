@@ -7,6 +7,7 @@ namespace Rebus.AdoNet.Dialects
 	{
 		private Version MinimumDatabaseVersion => new Version("9.5");
 
+		public override bool SupportsOnConflictClause => true;
 		public override bool SupportsSkipLockedFunction => true;
 		public override string ParameterSkipLocked => "SKIP LOCKED";
 		public override string ParameterSelectForUpdate => "FOR UPDATE";
