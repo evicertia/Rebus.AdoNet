@@ -567,11 +567,11 @@ namespace Rebus.AdoNet
 		{
 			var dialect = scope.Dialect;
 
-			if (dialect.SupportsTableExpressions && dialect.SupportsReturningClause)
+			if (dialect.SupportsTableExpressions && dialect.SupportsReturningClause && dialect.SupportsOnConflictClause)
 			{
 				DeclareIndexUsingTableExpressions(sagaData, scope, propertiesToIndex);
 			}
-			else if (dialect.SupportsReturningClause)
+			else if (dialect.SupportsReturningClause && dialect.SupportsOnConflictClause)
 			{
 				DeclareIndexUsingReturningClause(sagaData, scope, propertiesToIndex);
 			}

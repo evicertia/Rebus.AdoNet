@@ -473,6 +473,10 @@ namespace Rebus.AdoNet.Dialects
 		public virtual bool SupportsReturningClause => false;
 		#endregion
 
+		#region On Conflict Clause
+		public virtual bool SupportsOnConflictClause => false;
+		#endregion
+
 		#region SqlDialects Registry
 
 		private static readonly IList<SqlDialect> _dialects =
