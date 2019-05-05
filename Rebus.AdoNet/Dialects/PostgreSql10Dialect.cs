@@ -21,7 +21,7 @@ namespace Rebus.AdoNet.Dialects
 			{
 				var versionString = (string)connection.ExecuteScalar(@"SELECT VERSION();");
 				var databaseVersion = new Version(this.GetDatabaseVersion(connection));
-				return versionString.StartsWith("PostgreSQL ") && databaseVersion >= MinimumDatabaseVersion;
+				return versionString.StartsWith("PostgreSQL ", StringComparison.Ordinal) && databaseVersion >= MinimumDatabaseVersion;
 			}
 			catch
 			{

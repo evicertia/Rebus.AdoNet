@@ -16,5 +16,6 @@ namespace Rebus.AdoNet.Schema
 		public uint Scale { get; set; }
 		public bool Nullable { get; set; }
 		public bool Identity { get; set; }
+		public bool Array { get; set; }
 	}
 }
