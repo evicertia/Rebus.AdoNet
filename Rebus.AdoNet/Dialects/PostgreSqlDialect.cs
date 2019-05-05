@@ -51,6 +51,8 @@ namespace Rebus.AdoNet.Dialects
 
 		#region Overrides
 		public override bool SupportsSelectForUpdate => true;
+		public override string ParameterSelectForUpdate => "FOR UPDATE";
+
 		public override bool SupportsTryAdvisoryLockFunction => true;
 
 		public override string GetDatabaseVersion(IDbConnection connection)
