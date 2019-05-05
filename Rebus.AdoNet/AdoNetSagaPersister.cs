@@ -4,6 +4,7 @@ using System.Linq;
 using System.Data.Common;
 using System.Collections;
 using System.Collections.Generic;
+using System.Text;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 
@@ -23,9 +24,10 @@ namespace Rebus.AdoNet
 		private const string SAGA_TYPE_COLUMN = "saga_type";
 		private const string SAGA_DATA_COLUMN = "data";
 		private const string SAGA_REVISION_COLUMN = "revision";
+		private const string SAGAINDEX_ID_COLUMN = "saga_id";
 		private const string SAGAINDEX_KEY_COLUMN = "key";
 		private const string SAGAINDEX_VALUE_COLUMN = "value";
-		private const string SAGAINDEX_ID_COLUMN = "saga_id";
+		private const string SAGAINDEX_VALUES_COLUMN = "values";
 		private static ILog log;
 		private static readonly JsonSerializerSettings Settings = new JsonSerializerSettings {
 			TypeNameHandling = TypeNameHandling.All, // TODO: Make it configurable by adding a SagaTypeResolver feature.
@@ -107,7 +109,7 @@ namespace Rebus.AdoNet
 							Columns = new []
 							{
 								new AdoNetColumn() { Name = SAGA_ID_COLUMN, DbType = DbType.Guid },
-								new AdoNetColumn() { Name = SAGA_TYPE_COLUMN, DbType = DbType.StringFixedLength, Length = 80 },
+								new AdoNetColumn() { Name = SAGA_TYPE_COLUMN, DbType = DbType.String, Length = 80 },
 								new AdoNetColumn() { Name = SAGA_REVISION_COLUMN, DbType = DbType.Int32 },
 								new AdoNetColumn() { Name = SAGA_DATA_COLUMN, DbType = DbType.String, Length = 1073741823}
 							},
@@ -126,10 +128,11 @@ namespace Rebus.AdoNet
 							Columns = new []
 							{
 								new AdoNetColumn() { Name = SAGAINDEX_ID_COLUMN, DbType = DbType.Guid },
-								new AdoNetColumn() { Name = SAGAINDEX_KEY_COLUMN, DbType = DbType.StringFixedLength, Length = 200  },
-								new AdoNetColumn() { Name = SAGAINDEX_VALUE_COLUMN, DbType = DbType.StringFixedLength, Length = 200 }
+								new AdoNetColumn() { Name = SAGAINDEX_KEY_COLUMN, DbType = DbType.String, Length = 200  },
+								new AdoNetColumn() { Name = SAGAINDEX_VALUE_COLUMN, DbType = DbType.String, Length = 200, Nullable = true },
+								new AdoNetColumn() { Name = SAGAINDEX_VALUES_COLUMN, DbType = DbType.String, Length = 65535, Nullable = true }
 							},
-							PrimaryKey = new[] { SAGAINDEX_ID_COLUMN, SAGAINDEX_KEY_COLUMN  },
+							PrimaryKey = new[] { SAGAINDEX_ID_COLUMN, SAGAINDEX_KEY_COLUMN },
 							Indexes = new []
 							{
 								new AdoNetIndex() { Name = "ix_sagaindexes_id", Columns = new[] { SAGAINDEX_ID_COLUMN } }
@@ -250,7 +253,7 @@ namespace Rebus.AdoNet
 			}
 		}
 
-		private void DeclareIndexUsingTableExpressions(ISagaData sagaData, AdoNetUnitOfWorkScope scope, IDictionary<string, string> propertiesToIndex)
+		private void DeclareIndexUsingTableExpressions(ISagaData sagaData, AdoNetUnitOfWorkScope scope, IDictionary<string, object> propertiesToIndex)
 		{
 			var dialect = scope.Dialect;
 			var connection = scope.Connection;
@@ -309,7 +312,7 @@ namespace Rebus.AdoNet
 			}
 		}
 
-		private void DeclareIndexUsingReturningClause(ISagaData sagaData, AdoNetUnitOfWorkScope scope, IDictionary<string, string> propertiesToIndex)
+		private void DeclareIndexUsingReturningClause(ISagaData sagaData, AdoNetUnitOfWorkScope scope, IDictionary<string, object> propertiesToIndex)
 		{
 			var dialect = scope.Dialect;
 			var connection = scope.Connection;
@@ -398,11 +401,19 @@ namespace Rebus.AdoNet
 			}
 		}
 
-		private void DeclareIndexUnoptimized(ISagaData sagaData, AdoNetUnitOfWorkScope scope, IDictionary<string, string> propertiesToIndex)
+		private void DeclareIndexUnoptimized(ISagaData sagaData, AdoNetUnitOfWorkScope scope, IDictionary<string, object> propertiesToIndex)
 		{
 			var connection = scope.Connection;
 			var dialect = scope.Dialect;
 			var sagaTypeName = GetSagaTypeName(sagaData.GetType());
+
+			var idxTbl = dialect.QuoteForTableName(sagaIndexTableName);
+			var idCol = dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN);
+			var keyCol = dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN);
+			var valueCol = dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN);
+			var valuesCol = dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN);
+
+			var idParam = dialect.EscapeParameter(SAGAINDEX_ID_COLUMN);
 
 			var existingKeys = Enumerable.Empty<string>();
 
@@ -438,20 +449,26 @@ namespace Rebus.AdoNet
 				using (var command = connection.CreateCommand())
 				{
 					command.CommandText = string.Format(
-						"UPDATE {0} SET {1} = {2} " + 
-						"WHERE {3} = {4} AND {5} = {6};",
+						"UPDATE {0} SET {1} = {2}, {3} = {4} " + 
+						"WHERE {5} = {6} AND {7} = {8};",
 						dialect.QuoteForTableName(sagaIndexTableName),		//< 0
 						dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),	//< 1
-						dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN),	//< 2
-						dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),	//< 3
-						dialect.EscapeParameter(SAGAINDEX_ID_COLUMN),		//< 4
-						dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),	//< 5
-						dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN)		//< 6
+						dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN),    //< 2
+						dialect.QuoteForColumnName(SAGAINDEX_VALUES_COLUMN),//< 3
+						dialect.EscapeParameter(SAGAINDEX_VALUES_COLUMN),   //< 4
+						dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),	//< 5
+						dialect.EscapeParameter(SAGAINDEX_ID_COLUMN),		//< 6
+						dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),	//< 7
+						dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN)		//< 8
 					);
+
+					var value = GetIndexValue(propertiesToIndex[key]);
+					var values = GetConcatenatedIndexValues(GetIndexValues(propertiesToIndex[key]));
 
 					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
 					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN), DbType.String, key);
-					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN), DbType.String, propertiesToIndex[key] ?? "");
+					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN), DbType.String, value);
+					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUES_COLUMN), DbType.String, values);
 
 					try
 					{
@@ -503,9 +520,10 @@ namespace Rebus.AdoNet
 					.Select((p, i) => new
 					{
 						PropertyName = p.Key,
-						PropertyValue = p.Value ?? "",
+						PropertyValue = p.Value,
 						PropertyNameParameter = string.Format("n{0}", i),
-						PropertyValueParameter = string.Format("v{0}", i)
+						PropertyValueParameter = string.Format("v{0}", i),
+						PropertyValuesParameter = string.Format("vs{0}", i)
 					})
 					.ToList();
 
@@ -514,26 +532,32 @@ namespace Rebus.AdoNet
 				// Insert new keys..
 				using (var command = connection.CreateCommand())
 				{
-					var values = parameters.Select(p => string.Format("({0}, {1}, {2})",
-						dialect.EscapeParameter(SAGAINDEX_ID_COLUMN),
+
+					var tuples = parameters.Select(p => string.Format("({0}, {1}, {2}, {3})",
+						idParam,
 						dialect.EscapeParameter(p.PropertyNameParameter),
-						dialect.EscapeParameter(p.PropertyValueParameter)
+						dialect.EscapeParameter(p.PropertyValueParameter),
+						dialect.EscapeParameter(p.PropertyValuesParameter)
 					));
 
-
 					command.CommandText = string.Format(
-						"INSERT INTO {0} ({1}, {2}, {3}) VALUES {4};",
+						"INSERT INTO {0} ({1}, {2}, {3}, {4}) VALUES {5};",
 						dialect.QuoteForTableName(sagaIndexTableName),      //< 0
 						dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),	//< 1
 						dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),	//< 2
-						dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),	//< 3
-						string.Join(", ", values)							//< 4
+						dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN), //< 3
+						dialect.QuoteForColumnName(SAGAINDEX_VALUES_COLUMN),//< 4
+						string.Join(", ", tuples)							//< 5
 					);
 
 					foreach (var parameter in parameters)
 					{
+						var value = GetIndexValue(parameter.PropertyValue);
+						var values = GetConcatenatedIndexValues(GetIndexValues(parameter.PropertyValue));
+
 						command.AddParameter(dialect.EscapeParameter(parameter.PropertyNameParameter), DbType.String, parameter.PropertyName);
-						command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, parameter.PropertyValue ?? "");
+						command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, value);
+						command.AddParameter(dialect.EscapeParameter(parameter.PropertyValuesParameter), DbType.String, values);
 					}
 
 					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
@@ -551,7 +575,7 @@ namespace Rebus.AdoNet
 			}
 		}
 
-		private void DeclareIndex(ISagaData sagaData, AdoNetUnitOfWorkScope scope, IDictionary<string, string> propertiesToIndex)
+		private void DeclareIndex(ISagaData sagaData, AdoNetUnitOfWorkScope scope, IDictionary<string, object> propertiesToIndex)
 		{
 			var dialect = scope.Dialect;
 
@@ -642,40 +666,62 @@ namespace Rebus.AdoNet
 					}
 					else
 					{
-						command.CommandText = string.Format(
-							@"SELECT s.{0} " +
-							@"FROM {1} s " +
-							@"JOIN {2} i on s.{3} = i.{4} " +
-							@"WHERE i.{5} = {6} AND i.{7} = {8} {9}",
-							dialect.QuoteForColumnName(SAGA_DATA_COLUMN),
-							dialect.QuoteForTableName(sagaTableName),
-							dialect.QuoteForTableName(sagaIndexTableName),
-							dialect.QuoteForColumnName(SAGA_ID_COLUMN), dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),
-							dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN), dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN),
-							dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN), dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN),
-							useSagaLocking ? dialect.ParameterSelectForUpdate : string.Empty
-						);
+						var dataCol = dialect.QuoteForColumnName(SAGA_DATA_COLUMN);
+						var sagaTblName = dialect.QuoteForTableName(sagaTableName);
+						var indexTblName = dialect.QuoteForTableName(sagaIndexTableName);
+						var sagaIdCol = dialect.QuoteForColumnName(SAGA_ID_COLUMN);
+						var indexIdCol = dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN);
+						var indexKeyCol = dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN);
+						var indexKeyParam = dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN);
+						var indexValueCol = dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN);
+						var indexValueParm = dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN);
+						var indexValuesCol = dialect.QuoteForColumnName(SAGAINDEX_VALUES_COLUMN);
+						var indexValuesParm = dialect.EscapeParameter(SAGAINDEX_VALUES_COLUMN);
+						var forUpdate = useSagaLocking ? dialect.ParameterSelectForUpdate : string.Empty;
+
+						command.CommandText = $@"
+							SELECT s.{dataCol}
+							FROM {sagaTblName} s
+							JOIN {indexTblName} i on s.{sagaIdCol} = i.{indexIdCol}
+							WHERE i.{indexKeyCol} = {indexKeyParam}
+							  AND (
+							  		CASE WHEN {indexValueParm} IS NULL THEN i.{indexValueCol} IS NULL
+									ELSE 
+										(
+											i.{indexValueCol} = {indexValueParm}
+												OR
+											(i.{indexValuesCol} is NOT NULL AND i.{indexValuesCol} LIKE ('%' || {indexValuesParm} || '%'))
+										)
+									END
+								  )
+							{forUpdate};".Replace("\t", "");
+							;
+
+						var value = GetIndexValue(fieldFromMessage);
+						var values = value != null ? GetConcatenatedIndexValues(new[] { value }) : null;	
+
 						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN), sagaDataPropertyPath);
-						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN), (fieldFromMessage ?? "").ToString());
+						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN), DbType.String, value);
+						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUES_COLUMN), DbType.String, values);
 					}
 
-					var value = (string)command.ExecuteScalar();
+					var data = (string)command.ExecuteScalar();
 
-					if (value == null) return null;
+					if (data == null) return null;
 
 					try
 					{
-						return JsonConvert.DeserializeObject<TSagaData>(value, Settings);
+						return JsonConvert.DeserializeObject<TSagaData>(data, Settings);
 					}
 					catch { }
 
 					try
 					{
-						return (TSagaData)JsonConvert.DeserializeObject(value, Settings);
+						return (TSagaData)JsonConvert.DeserializeObject(data, Settings);
 					}
 					catch (Exception exception)
 					{
-						var message = string.Format("An error occurred while attempting to deserialize '{0}' into a {1}", value, typeof(TSagaData));
+						var message = string.Format("An error occurred while attempting to deserialize '{0}' into a {1}", data, typeof(TSagaData));
 
 						throw new ApplicationException(message, exception);
 					}
@@ -683,28 +729,67 @@ namespace Rebus.AdoNet
 			}
 		}
 
-		IDictionary<string, string> GetPropertiesToIndex(ISagaData sagaData, IEnumerable<string> sagaDataPropertyPathsToIndex)
+		private bool ShouldIndexValue(object value)
+		{
+			if (indexNullProperties)
+				return true;
+
+			if (value == null) return false;
+			if (value is string) return true;
+			if ((value is IEnumerable) && !(value as IEnumerable).Cast<object>().Any()) return false;
+
+			return true;
+		}
+
+		private IDictionary<string, object> GetPropertiesToIndex(ISagaData sagaData, IEnumerable<string> sagaDataPropertyPathsToIndex)
 		{
 			return sagaDataPropertyPathsToIndex
-				.SelectMany(path =>
-				{
-					var value = Reflect.Value(sagaData, path);
-					var result = new List<KeyValuePair<string, string>>();
-
-					if ((value is IEnumerable) && !(value is string))
-					{
-						foreach (var item in (value as IEnumerable))
-							result.Add(new KeyValuePair<string, string>(path, item?.ToString()));
-					}
-					else
-					{
-						result.Add(new KeyValuePair<string, string>(path, value?.ToString()));
-					}
-
-					return result;
-				})
-				.Where(kvp => indexNullProperties || kvp.Value != null)
+				.Select(x => new { Key = x, Value = Reflect.Value(sagaData, x) })
+				.Where(ShouldIndexValue)
 				.ToDictionary(x => x.Key, x => x.Value);
+		}
+
+		private static string GetIndexValue(object value)
+		{
+			if (value is string)
+			{
+				return value as string;
+			}
+			else if (value == null || value is IEnumerable)
+			{
+				return null;
+			}
+
+			return Convert.ToString(value);
+		}
+
+		private static IEnumerable<string> GetIndexValues(object value)
+		{
+			if (!(value is IEnumerable) || value is string)
+			{
+				return null;
+			}
+
+			return (value as IEnumerable).Cast<object>().Select(x => Convert.ToString(x)).ToArray();
+		}
+
+		private static string GetConcatenatedIndexValues(IEnumerable<string> values)
+		{
+			if (values == null || !values.Any())
+			{
+				return null;
+			}
+
+			var sb = new StringBuilder(values.Sum(x => x.Length + 1) + 1);
+			sb.Append('|');
+
+			foreach (var value in values)
+			{
+				sb.Append(value);
+				sb.Append('|');
+			}
+
+			return sb.ToString();
 		}
 
 		#region Default saga name

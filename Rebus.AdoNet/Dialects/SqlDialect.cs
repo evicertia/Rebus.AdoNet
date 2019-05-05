@@ -32,7 +32,6 @@ namespace Rebus.AdoNet.Dialects
 
 		#region Properties
 		public virtual ushort Priority => ushort.MinValue;
-		public virtual bool SupportsSelectForUpdate => false;
 		#endregion
 
 		#region Get Database Version
@@ -333,11 +332,6 @@ namespace Rebus.AdoNet.Dialects
 		#region Parameter handling
 
 		/// <summary>
-		/// Gets the Select For Update Parameter
-		/// </summary>
-		public virtual string ParameterSelectForUpdate => string.Empty;
-
-		/// <summary>
 		/// Gets the parameter placeholder.
 		/// </summary>
 		/// <value>
@@ -445,9 +439,17 @@ namespace Rebus.AdoNet.Dialects
 
 		#endregion
 
+		#region
+		public virtual bool SupportsSelectForUpdate => false;
+		/// <summary>
+		/// Gets the Select For Update Parameter
+		/// </summary>
+		public virtual string ParameterSelectForUpdate => throw new NotSupportedException("Dialect does not support 'FOR UPDATE' clause");
+		#endregion
+
 		#region SkipLocked
 		public virtual bool SupportsSkipLockedFunction => false;
-		public virtual string ParameterSkipLocked => string.Empty;
+		public virtual string ParameterSkipLocked => throw new NotSupportedException("Dialect does not support 'SKIP LOCKED' clause");
 		#endregion
 
 		#region AdvisoryLockFunctions

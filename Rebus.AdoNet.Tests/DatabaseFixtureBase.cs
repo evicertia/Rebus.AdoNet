@@ -20,6 +20,7 @@ namespace Rebus.AdoNet
 		private static readonly ILog _Log = LogManager.GetLogger<DatabaseFixtureBase>();
 
 		private const string CONNECTION_STRING = @"Data Source={0};Version=3;New=True;";
+		internal const string NPGSQL_PROVIDER_NAME = "Npgsql";
 
 		protected string ConnectionString { get; }
 		protected string ProviderName { get; }
@@ -63,7 +64,7 @@ namespace Rebus.AdoNet
 		public static IEnumerable<object[]> ConnectionSources()
 		{
 			yield return new[] { GetSqliteProviderName(), GetSqliteConnectionString() };
-			yield return new[] { "Npgsql", GetPostgresConnectionString() };
+			yield return new[] { NPGSQL_PROVIDER_NAME, GetPostgresConnectionString() };
 		}
 
 		private SqlDialect GetDialect()
