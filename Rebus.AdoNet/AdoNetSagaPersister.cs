@@ -18,7 +18,7 @@ namespace Rebus.AdoNet
 	/// </summary>
 	public class AdoNetSagaPersister : IStoreSagaData, AdoNetSagaPersisterFluentConfigurer, ICanUpdateMultipleSagaDatasAtomically
 	{
-		private const int MaximumSagaDataTypeNameLength = 40;
+		private const int MaximumSagaDataTypeNameLength = 80;
 		private const string SAGA_ID_COLUMN = "id";
 		private const string SAGA_TYPE_COLUMN = "saga_type";
 		private const string SAGA_DATA_COLUMN = "data";
@@ -780,7 +780,7 @@ namespace Rebus.AdoNet
 
 This is due to a limitation in SQL Server, where compound indexes have a 900 byte upper size limit - and
 since the saga index needs to be able to efficiently query by saga type, key, and value at the same time,
-there's room for only 200 characters as the key, 200 characters as the value, and 40 characters as the
+there's room for only 200 characters as the key, 200 characters as the value, and 80 characters as the
 saga type name.",
 						MaximumSagaDataTypeNameLength));
 			}
