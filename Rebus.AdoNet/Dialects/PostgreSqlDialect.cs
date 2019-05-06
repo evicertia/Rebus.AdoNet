@@ -10,6 +10,8 @@ namespace Rebus.AdoNet.Dialects
 {
 	public class PostgreSqlDialect : SqlDialect
 	{
+		protected virtual Version MinimumDatabaseVersion => new Version("8.0");
+
 		public PostgreSqlDialect()
 		{
 
@@ -45,17 +47,24 @@ namespace Rebus.AdoNet.Dialects
 		}
 
 		#region Overrides
+		public override ushort Priority => 01;
 		public override bool SupportsSelectForUpdate => true;
 		public override string ParameterSelectForUpdate => "FOR UPDATE";
 
-		public override bool SupportsTryAdvisoryLockFunction => true;
+		public override string GetDatabaseVersion(IDbConnection connection)
+		{
+			var result = connection.ExecuteScalar("SHOW server_version;");
+			var versionString = Convert.ToString(result);
+			return versionString.Split(' ').First();
+		}
 
 		public override bool SupportsThisDialect(IDbConnection connection)
 		{
 			try
 			{
 				var versionString = (string)connection.ExecuteScalar(@"SELECT VERSION();");
-				return versionString.StartsWith("PostgreSQL ", StringComparison.Ordinal);
+				var databaseVersion = new Version(this.GetDatabaseVersion(connection));
+				return versionString.StartsWith("PostgreSQL ", StringComparison.Ordinal) && databaseVersion >= MinimumDatabaseVersion;
 			}
 			catch
 			{
@@ -76,6 +85,12 @@ namespace Rebus.AdoNet.Dialects
 				default: throw new ArgumentOutOfRangeException($"Invalid identity column type: {type}");
 			}
 		}
+
+		#endregion
+
+		#region TryAdvisoryLock
+
+		public override bool SupportsTryAdvisoryLockFunction => true;
 
 		public override string FormatTryAdvisoryLock(IEnumerable<object> args)
 		{

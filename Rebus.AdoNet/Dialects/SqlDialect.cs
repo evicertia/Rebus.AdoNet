@@ -91,7 +91,17 @@ namespace Rebus.AdoNet.Dialects
 		/// Get the column type of corresponding to the specified parameters.
 		/// <see cref="SqlType"/>.
 		/// </summary>
-		/// <param name="sqlType">The SqlType </param>
+		/// <param name="type">The SqlType </param>
+		public virtual string GetColumnType(DbType type)
+		{
+			return _typeNames.Get(type);
+		}
+
+		/// <summary>
+		/// Get the column type of corresponding to the specified parameters.
+		/// <see cref="SqlType"/>.
+		/// </summary>
+		/// <param name="type">The SqlType </param>
 		/// <param name="length">The datatype length </param>
 		/// <param name="precision">The datatype precision </param>
 		/// <param name="scale">The datatype scale </param>
