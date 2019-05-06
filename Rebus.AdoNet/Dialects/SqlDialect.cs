@@ -449,7 +449,7 @@ namespace Rebus.AdoNet.Dialects
 
 		#endregion
 
-		#region
+		#region Select For Update
 		public virtual bool SupportsSelectForUpdate => false;
 		/// <summary>
 		/// Gets the Select For Update Parameter
