@@ -449,6 +449,8 @@ namespace Rebus.AdoNet.Dialects
 
 		#endregion
 
+		#region Select For Update
+		#region
 		#region For Update / NoWait / SkipLocked
 		public virtual bool SupportsSelectForUpdate => false;
 		public virtual string SelectForUpdateClause => string.Empty;
