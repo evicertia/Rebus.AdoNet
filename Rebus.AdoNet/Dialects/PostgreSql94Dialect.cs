@@ -9,19 +9,5 @@ namespace Rebus.AdoNet.Dialects
 		public override ushort Priority => 94;
 
 		public override bool SupportsTableExpressions => true;
-
-		public override bool SupportsThisDialect(IDbConnection connection)
-		{
-			try
-			{
-				var versionString = (string)connection.ExecuteScalar(@"SELECT VERSION();");
-				var databaseVersion = new Version(this.GetDatabaseVersion(connection));
-				return versionString.StartsWith("PostgreSQL ") && databaseVersion >= MinimumDatabaseVersion;
-			}
-			catch
-			{
-				return false;
-			}
-		}
 	}
 }

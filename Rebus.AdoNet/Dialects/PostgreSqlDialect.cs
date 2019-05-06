@@ -48,12 +48,11 @@ namespace Rebus.AdoNet.Dialects
 			RegisterColumnType(DbType.Guid, "uuid");
 
 		}
+		public override bool SupportsSelectForUpdate => true;
 
 		#region Overrides
-		public override bool SupportsSelectForUpdate => true;
+		public override ushort Priority => 01;
 		public override string ParameterSelectForUpdate => "FOR UPDATE";
-
-		public override bool SupportsTryAdvisoryLockFunction => true;
 
 		public override string GetDatabaseVersion(IDbConnection connection)
 		{
@@ -105,6 +104,12 @@ namespace Rebus.AdoNet.Dialects
 
 			return $"pg_try_advisory_lock({@params})";
 		}
+
+		#endregion
+
+		#region TryAdvisoryLock
+
+		public override bool SupportsTryAdvisoryLockFunction => true;
 		#endregion
 	}
 }

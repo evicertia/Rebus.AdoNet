@@ -271,40 +271,47 @@ namespace Rebus.AdoNet
 				.Select((p, i) => new
 				{
 					PropertyName = p.Key,
-					PropertyValue = p.Value ?? "",
+					PropertyValue = p.Value,
 					PropertyNameParameter = string.Format("n{0}", i),
-					PropertyValueParameter = string.Format("v{0}", i)
+					PropertyValueParameter = string.Format("v{0}", i),
+					PropertyValuesParameter = string.Format("vs{0}", i)
 				})
 				.ToList();
 
-			var values = parameters
-				.Select(p => string.Format("({0}, {1}, {2})",
+			var tuples = parameters
+				.Select(p => string.Format("({0}, {1}, {2}, {3})",
 					dialect.EscapeParameter(SAGAINDEX_ID_COLUMN),
 					dialect.EscapeParameter(p.PropertyNameParameter),
-					dialect.EscapeParameter(p.PropertyValueParameter)
+					dialect.EscapeParameter(p.PropertyValueParameter),
+					dialect.EscapeParameter(p.PropertyValuesParameter)
 				));
 
 			using (var command = connection.CreateCommand())
 			{
 				command.CommandText = string.Format(
 					"WITH existing AS (" +
-						"INSERT INTO {0} ({1}, {2}, {3}) VALUES {5} " +
-						"ON CONFLICT ({1}, {2}) DO UPDATE SET {3} = excluded.{3} " +
+						"INSERT INTO {0} ({1}, {2}, {3}, {4}) VALUES {6} " +
+						"ON CONFLICT ({1}, {2}) DO UPDATE SET {3} = excluded.{3}, {4} = excluded.{4} " +
 						"RETURNING {2}) " +
 					"DELETE FROM {0} " +
-					"WHERE {1} = {4} AND {2} NOT IN (SELECT {2} FROM existing);",
+					"WHERE {1} = {5} AND {2} NOT IN (SELECT {2} FROM existing);",
 					dialect.QuoteForTableName(sagaIndexTableName),      //< 0
 					dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),    //< 1
 					dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),	//< 2
-					dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),	//< 3
-					dialect.EscapeParameter(SAGAINDEX_ID_COLUMN),		//< 4
-					string.Join(", ", values)							//< 5
+					dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN), //< 3
+					dialect.QuoteForColumnName(SAGAINDEX_VALUES_COLUMN),//< 4
+					dialect.EscapeParameter(SAGAINDEX_ID_COLUMN),		//< 5
+					string.Join(", ", tuples)							//< 6
 				);
 
 				foreach (var parameter in parameters)
 				{
+					var value = GetIndexValue(parameter.PropertyValue);
+					var values = GetConcatenatedIndexValues(GetIndexValues(parameter.PropertyValue));
+
 					command.AddParameter(dialect.EscapeParameter(parameter.PropertyNameParameter), DbType.String, parameter.PropertyName);
-					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, parameter.PropertyValue ?? "");
+					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, value);
+					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValuesParameter), DbType.String, values);
 				}
 
 				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
@@ -331,36 +338,43 @@ namespace Rebus.AdoNet
 				.Select((p, i) => new
 				{
 					PropertyName = p.Key,
-					PropertyValue = p.Value ?? "",
+					PropertyValue = p.Value,
 					PropertyNameParameter = string.Format("n{0}", i),
-					PropertyValueParameter = string.Format("v{0}", i)
+					PropertyValueParameter = string.Format("v{0}", i),
+					PropertyValuesParameter = string.Format("vs{0}", i)
 				})
 				.ToList();
 
-			var values = parameters
-				.Select(p => string.Format("({0}, {1}, {2})",
+			var tuples = parameters
+				.Select(p => string.Format("({0}, {1}, {2}, {3})",
 					dialect.EscapeParameter(SAGAINDEX_ID_COLUMN),
 					dialect.EscapeParameter(p.PropertyNameParameter),
-					dialect.EscapeParameter(p.PropertyValueParameter)
+					dialect.EscapeParameter(p.PropertyValueParameter),
+					dialect.EscapeParameter(p.PropertyValuesParameter)
 				));
 						
 			using (var command = connection.CreateCommand())
 			{
 				command.CommandText = string.Format(
-					"INSERT INTO {0} ({1}, {2}, {3}) VALUES {4} " +
-						"ON CONFLICT ({1}, {2}) DO UPDATE SET {3} = excluded.{3} " +
+					"INSERT INTO {0} ({1}, {2}, {3}, {4}) VALUES {5} " +
+						"ON CONFLICT ({1}, {2}) DO UPDATE SET {3} = excluded.{3}, {4} = excluded.{4} " +
 						"RETURNING {2};",
 					dialect.QuoteForTableName(sagaIndexTableName),		//< 0
 					dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),	//< 1
 					dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),	//< 2
-					dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),	//< 3
-					string.Join(", ", values)							//< 4
+					dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN), //< 3
+					dialect.QuoteForColumnName(SAGAINDEX_VALUES_COLUMN),//< 4
+					string.Join(", ", tuples)							//< 5
 				);
 
 				foreach (var parameter in parameters)
 				{
+					var value = GetIndexValue(parameter.PropertyValue);
+					var values = GetConcatenatedIndexValues(GetIndexValues(parameter.PropertyValue));
+
 					command.AddParameter(dialect.EscapeParameter(parameter.PropertyNameParameter), DbType.String, parameter.PropertyName);
-					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, parameter.PropertyValue ?? "");
+					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, value);
+					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValuesParameter), DbType.String, values);
 				}
 
 				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
@@ -587,11 +601,11 @@ namespace Rebus.AdoNet
 		{
 			var dialect = scope.Dialect;
 
-			if (dialect.SupportsTableExpressions && dialect.SupportsReturningClause && dialect.SupportsOnConflictClause)
+			if (dialect.SupportsOnConflictClause && dialect.SupportsReturningClause && dialect.SupportsTableExpressions)
 			{
 				DeclareIndexUsingTableExpressions(sagaData, scope, propertiesToIndex);
 			}
-			else if (dialect.SupportsReturningClause && dialect.SupportsOnConflictClause)
+			else if (dialect.SupportsOnConflictClause && dialect.SupportsReturningClause)
 			{
 				DeclareIndexUsingReturningClause(sagaData, scope, propertiesToIndex);
 			}

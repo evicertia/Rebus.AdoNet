@@ -385,7 +385,7 @@ namespace Rebus.AdoNet
 		{
 			var persister = CreatePersister(createTables: true);
 			var propertyName = Reflect.Path<SomePieceOfSagaData>(d => d.PropertyThatCanBeNull);
-			var dataWithIndexedNullProperty = new SomePieceOfSagaData { SomeValueWeCanRecognize = "hello" };
+			var dataWithIndexedNullProperty = new SomePieceOfSagaData { Id = Guid.NewGuid(), SomeValueWeCanRecognize = "hello" };
 
 			persister.Insert(dataWithIndexedNullProperty, new[] { propertyName });
 			var sagaDataFoundViaNullProperty = persister.Find<SomePieceOfSagaData>(propertyName, null);

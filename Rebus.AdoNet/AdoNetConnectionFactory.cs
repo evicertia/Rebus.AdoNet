@@ -8,18 +8,26 @@ using System.Threading.Tasks;
 
 using Rebus;
 using Rebus.Bus;
+using Rebus.Logging;
 using Rebus.AdoNet.Dialects;
 
 namespace Rebus.AdoNet
 {
 	public class AdoNetConnectionFactory
 	{
+		private static ILog _log;
 		private readonly DbProviderFactory _factory;
 		private readonly string _connectionString;
 		private readonly string _providerName;
 		private readonly SqlDialect _dialect;
 
 		public SqlDialect Dialect => _dialect;
+
+		static AdoNetConnectionFactory()
+		{
+			RebusLoggerFactory.Changed += f => _log = f.GetCurrentClassLogger();
+
+		}
 
 		public AdoNetConnectionFactory(string connectionString, string providerName)
 		{
@@ -30,6 +38,7 @@ namespace Rebus.AdoNet
 
 			if (_dialect == null) throw new InvalidOperationException($"Unable to guess dialect for: {connectionString}");
 
+			_log.Info("Created new connection factory for {0}, using dialect {1}.", _factory.GetType().Name, _dialect.GetType().Name);
 		}
 
 		public IDbConnection OpenConnection()
