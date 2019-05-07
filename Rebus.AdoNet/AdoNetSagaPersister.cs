@@ -111,7 +111,7 @@ namespace Rebus.AdoNet
 								new AdoNetColumn() { Name = SAGA_ID_COLUMN, DbType = DbType.Guid },
 								new AdoNetColumn() { Name = SAGA_TYPE_COLUMN, DbType = DbType.String, Length = MaximumSagaDataTypeNameLength },
 								new AdoNetColumn() { Name = SAGA_REVISION_COLUMN, DbType = DbType.Int32 },
-								new AdoNetColumn() { Name = SAGA_DATA_COLUMN, DbType = DbType.String, Length = 1073741823}
+								new AdoNetColumn() { Name = SAGA_DATA_COLUMN, DbType = DbType.String, Length = 1073741823 }
 							},
 							PrimaryKey = new[] { SAGA_ID_COLUMN }
 						}
@@ -130,7 +130,7 @@ namespace Rebus.AdoNet
 								new AdoNetColumn() { Name = SAGAINDEX_ID_COLUMN, DbType = DbType.Guid },
 								new AdoNetColumn() { Name = SAGAINDEX_KEY_COLUMN, DbType = DbType.String, Length = 200  },
 								new AdoNetColumn() { Name = SAGAINDEX_VALUE_COLUMN, DbType = DbType.String, Length = 200, Nullable = true },
-								new AdoNetColumn() { Name = SAGAINDEX_VALUES_COLUMN, DbType = DbType.String, Length = 65535, Nullable = true }
+								new AdoNetColumn() { Name = SAGAINDEX_VALUES_COLUMN, DbType = DbType.String, Length = 65535, Nullable = true, Array = dialect.SupportsArrayTypes }
 							},
 							PrimaryKey = new[] { SAGAINDEX_ID_COLUMN, SAGAINDEX_KEY_COLUMN },
 							Indexes = new []
@@ -299,11 +299,16 @@ namespace Rebus.AdoNet
 				foreach (var parameter in parameters)
 				{
 					var value = GetIndexValue(parameter.PropertyValue);
-					var values = GetConcatenatedIndexValues(GetIndexValues(parameter.PropertyValue));
 
 					command.AddParameter(dialect.EscapeParameter(parameter.PropertyNameParameter), DbType.String, parameter.PropertyName);
 					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, value);
-					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValuesParameter), DbType.String, values);
+
+					var values = (dialect.SupportsArrayTypes)
+						? (object)GetIndexValues(parameter.PropertyValue)?.ToArray()
+						: GetConcatenatedIndexValues(GetIndexValues(parameter.PropertyValue));
+					var dbtype = dialect.SupportsArrayTypes ? DbType.Object : DbType.String;
+
+					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValuesParameter), dbtype, values);
 				}
 
 				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
@@ -692,6 +697,9 @@ namespace Rebus.AdoNet
 						var indexValuesCol = dialect.QuoteForColumnName(SAGAINDEX_VALUES_COLUMN);
 						var indexValuesParm = dialect.EscapeParameter(SAGAINDEX_VALUES_COLUMN);
 						var forUpdate = useSagaLocking ? dialect.ParameterSelectForUpdate : string.Empty;
+						var valuesPredicate = dialect.SupportsArrayTypes
+							? $"(i.{indexValuesCol} @> {indexValuesParm})"
+							: $"(i.{indexValuesCol} LIKE ('%' || {indexValuesParm} || '%'))";
 
 						command.CommandText = $@"
 							SELECT s.{dataCol}
@@ -704,19 +712,21 @@ namespace Rebus.AdoNet
 										(
 											i.{indexValueCol} = {indexValueParm}
 												OR
-											(i.{indexValuesCol} is NOT NULL AND i.{indexValuesCol} LIKE ('%' || {indexValuesParm} || '%'))
+											(i.{indexValuesCol} is NOT NULL AND {valuesPredicate})
 										)
 									END
 								  )
 							{forUpdate};".Replace("\t", "");
-							;
 
 						var value = GetIndexValue(fieldFromMessage);
-						var values = value != null ? GetConcatenatedIndexValues(new[] { value }) : null;	
+						var values = value == null ? null : dialect.SupportsArrayTypes
+							? (object)(new[] { value })
+							: GetConcatenatedIndexValues(new[] { value });
+						var dbtype = dialect.SupportsArrayTypes ? DbType.Object : DbType.String;
 
 						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN), sagaDataPropertyPath);
 						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN), DbType.String, value);
-						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUES_COLUMN), DbType.String, values);
+						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUES_COLUMN), dbtype, values);
 					}
 
 					var data = (string)command.ExecuteScalar();

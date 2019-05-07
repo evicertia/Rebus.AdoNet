@@ -108,5 +108,9 @@ namespace Rebus.AdoNet.Dialects
 			return $"pg_try_advisory_lock({@params})";
 		}
 		#endregion
+
+		#region Arrays Support
+		public override bool SupportsArrayTypes => false;
+		#endregion
 	}
 }

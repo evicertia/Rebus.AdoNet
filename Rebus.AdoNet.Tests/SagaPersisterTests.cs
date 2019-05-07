@@ -507,7 +507,7 @@ namespace Rebus.AdoNet
 
 			Assert.That(dataViaNonexistentField, Is.Null);
 			Assert.That(dataViaNonexistentValue, Is.Null);
-			Assert.That(mySagaData.SomeField, Is.EqualTo("3"));
+			Assert.That(mySagaData?.SomeField, Is.EqualTo("3"));
 		}
 
 		[Test]
