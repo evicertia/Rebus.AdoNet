@@ -40,6 +40,7 @@ namespace Rebus.AdoNet
 		private readonly string sagaTableName;
 		private readonly string idPropertyName;
 		private bool useSagaLocking;
+		private bool useSqlArrays = false;
 		private bool useNoWaitSagaLocking;
 		private bool indexNullProperties = true;
 		private Func<Type, string> sagaNameCustomizer = null;
@@ -60,6 +61,8 @@ namespace Rebus.AdoNet
 			this.sagaIndexTableName = sagaIndexTableName;
 			this.idPropertyName = Reflect.Path<ISagaData>(x => x.Id);
 		}
+
+		#region AdoNetSagaPersisterFluentConfigurer
 
 		/// <summary>
 		/// Configures the persister to ignore null-valued correlation properties and not add them to the saga index.
@@ -166,6 +169,28 @@ namespace Rebus.AdoNet
 			this.sagaNameCustomizer = customizer;
 			return this;
 		}
+
+		/// <summary>
+		/// Enables locking of sagas as to avoid two or more workers to update them concurrently.
+		/// </summary>
+		/// <returns>The saga locking.</returns>
+		public AdoNetSagaPersisterFluentConfigurer EnableSagaLocking()
+		{
+			useSagaLocking = true;
+			return this;
+		}
+
+		/// <summary>
+		/// Uses the use of sql array types for storing indexes related to correlation properties.
+		/// </summary>
+		/// <returns>The sql arrays.</returns>
+		public AdoNetSagaPersisterFluentConfigurer UseSqlArraysForCorrelationIndexes()
+		{
+			useSqlArrays = true;
+			return this;
+		}
+
+		#endregion
 
 		public void Insert(ISagaData sagaData, string[] sagaDataPropertyPathsToIndex)
 		{
@@ -311,10 +336,10 @@ namespace Rebus.AdoNet
 					command.AddParameter(dialect.EscapeParameter(parameter.PropertyNameParameter), DbType.String, parameter.PropertyName);
 					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, value);
 
-					var values = (dialect.SupportsArrayTypes)
+					var values = ArraysEnabledFor(dialect)
 						? (object)GetIndexValues(parameter.PropertyValue)?.ToArray()
 						: GetConcatenatedIndexValues(GetIndexValues(parameter.PropertyValue));
-					var dbtype = dialect.SupportsArrayTypes ? DbType.Object : DbType.String;
+					var dbtype = ArraysEnabledFor(dialect) ? DbType.Object : DbType.String;
 
 					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValuesParameter), dbtype, values);
 				}
@@ -723,7 +748,7 @@ namespace Rebus.AdoNet
 						var indexValuesCol = dialect.QuoteForColumnName(SAGAINDEX_VALUES_COLUMN);
 						var indexValuesParm = dialect.EscapeParameter(SAGAINDEX_VALUES_COLUMN);
 						var forUpdate = GetSagaLockingClause(dialect);
-						var valuesPredicate = dialect.SupportsArrayTypes
+						var valuesPredicate = ArraysEnabledFor(dialect)
 							? $"(i.{indexValuesCol} @> {indexValuesParm})"
 							: $"(i.{indexValuesCol} LIKE ('%' || {indexValuesParm} || '%'))";
 
@@ -748,7 +773,7 @@ namespace Rebus.AdoNet
 						var values = value == null ? null : dialect.SupportsArrayTypes
 							? (object)(new[] { value })
 							: GetConcatenatedIndexValues(new[] { value });
-						var dbtype = dialect.SupportsArrayTypes ? DbType.Object : DbType.String;
+						var dbtype = ArraysEnabledFor(dialect) ? DbType.Object : DbType.String;
 
 						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN), sagaDataPropertyPath);
 						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN), DbType.String, value);
@@ -794,6 +819,11 @@ namespace Rebus.AdoNet
 					}
 				}
 			}
+		}
+
+		private bool ArraysEnabledFor(SqlDialect dialect)
+		{
+			return useSqlArrays && dialect.SupportsArrayTypes;
 		}
 
 		private bool ShouldIndexValue(object value)
