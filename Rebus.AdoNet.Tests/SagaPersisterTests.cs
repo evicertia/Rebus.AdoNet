@@ -202,7 +202,8 @@ namespace Rebus.AdoNet
 
 		protected AdoNetSagaPersister CreatePersister(bool createTables = false)
 		{
-			var result = new AdoNetSagaPersister(_manager, SagaTableName, SagaIndexTableName, _useSagaLocking);
+			var result = new AdoNetSagaPersister(_manager, SagaTableName, SagaIndexTableName);
+			if (_useSagaLocking) result.EnableSagaLocking();
 			if (createTables) result.EnsureTablesAreCreated();
 			return result;
 		}

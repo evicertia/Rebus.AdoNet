@@ -22,12 +22,23 @@ namespace Rebus.AdoNet
 		/// </summary>
 		AdoNetSagaPersisterFluentConfigurer DoNotIndexNullProperties();
 
-
 		/// <summary>
 		/// Customizes the saga names using this customizer.
 		/// </summary>
 		/// <param name="customizer">The customizer.</param>
 		/// <returns></returns>
 		AdoNetSagaPersisterFluentConfigurer CustomizeSagaNamesAs(Func<Type, string> customizer);
+
+		/// <summary>
+		/// Enables locking of sagas as to avoid two or more workers to update them concurrently.
+		/// </summary>
+		/// <returns>The saga locking.</returns>
+		AdoNetSagaPersisterFluentConfigurer EnableSagaLocking();
+
+		/// <summary>
+		/// Uses the use of sql array types for storing indexes related to correlation properties.
+		/// </summary>
+		/// <returns>The sql arrays.</returns>
+		AdoNetSagaPersisterFluentConfigurer UseSqlArraysForCorrelationIndexes();
 	}
 }
