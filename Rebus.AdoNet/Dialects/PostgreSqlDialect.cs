@@ -114,6 +114,11 @@ namespace Rebus.AdoNet.Dialects
 
 		#region Arrays Support
 		public override bool SupportsArrayTypes => false;
+
+		public override string FormatArrayAny(string arg1, string arg2)
+		{
+			return $"({arg1} @> {arg2})";
+		}
 		#endregion
 	}
 }

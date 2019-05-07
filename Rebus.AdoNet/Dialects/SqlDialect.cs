@@ -506,6 +506,11 @@ namespace Rebus.AdoNet.Dialects
 
 		#region Arrays Support
 		public virtual bool SupportsArrayTypes => false;
+
+		public virtual string FormatArrayAny(string arg1, string arg2)
+		{
+			throw new NotSupportedException("ArrayAny function not supported by this dialect.");
+		}
 		#endregion
 
 		#region SqlDialects Registry

@@ -749,7 +749,7 @@ namespace Rebus.AdoNet
 						var indexValuesParm = dialect.EscapeParameter(SAGAINDEX_VALUES_COLUMN);
 						var forUpdate = GetSagaLockingClause(dialect);
 						var valuesPredicate = ArraysEnabledFor(dialect)
-							? $"(i.{indexValuesCol} @> {indexValuesParm})"
+							? dialect.FormatArrayAny($"i.{indexValuesCol}", indexValuesParm)
 							: $"(i.{indexValuesCol} LIKE ('%' || {indexValuesParm} || '%'))";
 
 						command.CommandText = $@"
