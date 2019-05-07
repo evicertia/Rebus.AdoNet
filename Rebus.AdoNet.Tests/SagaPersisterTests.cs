@@ -115,13 +115,15 @@ namespace Rebus.AdoNet
 		private AdoNetConnectionFactory _factory;
 		private AdoNetUnitOfWorkManager _manager;
 		private readonly bool _useSagaLocking = false;
+		private readonly bool _useSqlArrays = false;
 		private const string SagaTableName = "Sagas";
 		private const string SagaIndexTableName = "SagasIndex";
 
-		public SagaPersisterTests(string provider, string connectionString, bool locking)
+		public SagaPersisterTests(string provider, string connectionString, bool locking, bool arrays)
 			: base(provider, connectionString)
 		{
 			_useSagaLocking = locking;
+			_useSqlArrays = arrays;
 		}
 
 		#region Message Context Helpers
@@ -191,13 +193,16 @@ namespace Rebus.AdoNet
 				{
 					Provider = x[0],
 					ConnectionString = x[1],
-					SupportsLocking = DatabaseFixtureBase.NPGSQL_PROVIDER_NAME == (string)x[0]
+					SupportsLocking = DatabaseFixtureBase.NPGSQL_PROVIDER_NAME == (string)x[0],
+					SupportsArrays = DatabaseFixtureBase.NPGSQL_PROVIDER_NAME == (string)x[0]
 				});
 
-			var @base = sources.Select(x => new[] { x.Provider, x.ConnectionString, false });
-			var extra = sources.Where(x => x.SupportsLocking).Select(x => new[] { x.Provider, x.ConnectionString, true });
+			var @base = sources.Select(x => new[] { x.Provider, x.ConnectionString, false, false });
+			var extra1 = sources.Where(x => x.SupportsLocking).Select(x => new[] { x.Provider, x.ConnectionString, true, false });
+			var extra2 = sources.Where(x => x.SupportsArrays).Select(x => new[] { x.Provider, x.ConnectionString, false, true });
+			var extra3 = sources.Where(x => x.SupportsLocking && x.SupportsArrays).Select(x => new[] { x.Provider, x.ConnectionString, true, true });
 
-			return @base.Union(extra);
+			return @base.Union(extra1).Union(extra2).Union(extra3);
 		}
 
 		protected AdoNetSagaPersister CreatePersister(bool createTables = false)
