@@ -111,5 +111,9 @@ namespace Rebus.AdoNet.Dialects
 
 		public override bool SupportsTryAdvisoryLockFunction => true;
 		#endregion
+
+		#region Arrays Support
+		public override bool SupportsArrayTypes => false;
+		#endregion
 	}
 }
