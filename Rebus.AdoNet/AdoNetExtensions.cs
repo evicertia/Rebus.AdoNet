@@ -34,8 +34,7 @@ namespace Rebus.AdoNet
 		/// <summary>
 		/// Configures Rebus to store sagas in AdoNet.
 		/// </summary>
-		public static AdoNetSagaPersisterFluentConfigurer StoreInAdoNet(this RebusSagasConfigurer configurer, string connectionStringName, string sagaTable, string sagaIndexTable,
-			bool useSagaLocking = false, UOWCreatorDelegate unitOfWorkCreator = null)
+		public static AdoNetSagaPersisterFluentConfigurer StoreInAdoNet(this RebusSagasConfigurer configurer, string connectionStringName, string sagaTable, string sagaIndexTable, UOWCreatorDelegate unitOfWorkCreator = null)
 		{
 			if(unitOfWorkCreator == null) unitOfWorkCreator = (fact, cont) => new AdoNetUnitOfWork(fact, cont);
 
@@ -44,7 +43,7 @@ namespace Rebus.AdoNet
 			var manager = new AdoNetUnitOfWorkManager(factory, unitOfWorkCreator);
 
 			configurer.Backbone.ConfigureEvents(x => x.AddUnitOfWorkManager(manager));
-			var persister = new AdoNetSagaPersister(manager, sagaTable, sagaIndexTable, useSagaLocking);
+			var persister = new AdoNetSagaPersister(manager, sagaTable, sagaIndexTable);
 
 			configurer.Use(persister);
 

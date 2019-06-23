@@ -107,6 +107,7 @@
     <Compile Include="DatabaseFixtureBase.cs" />
     <Compile Include="TempFile.cs" />
     <Compile Include="TimeoutStorageTests.cs" />
+    <Compile Include="CrossThreadRunner.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="App.config">

@@ -180,10 +180,11 @@ namespace Rebus.AdoNet
 			}
 		}
 
-		protected AdoNetSagaPersister CreatePersister(bool createTables = false)
+		protected AdoNetSagaPersister CreatePersister(bool createTables = false, bool useLocking = false, bool useNoWaitLocking = false)
 		{
-			var result = new AdoNetSagaPersister(_manager, SagaTableName, SagaIndexTableName, false);
+			var result = new AdoNetSagaPersister(_manager, SagaTableName, SagaIndexTableName);
 			if (createTables) result.EnsureTablesAreCreated();
+			if (useLocking) result.UseLockingOnSagaUpdates(!useNoWaitLocking);
 			return result;
 		}
 
@@ -427,7 +428,6 @@ namespace Rebus.AdoNet
 
 			Assert.That(foundSagaData.Id, Is.EqualTo(savedSagaDataId));
 		}
-
 
 		[Test]
 		public void PersistsComplexSagaLikeExpected()
@@ -790,6 +790,44 @@ namespace Rebus.AdoNet
 			}
 		}
 
+		#endregion
+
+		#region Saga Locking
+		[Test]
+		public void FindSameSagaTwiceThrowsOnNoWait()
+		{
+			// Skip this test on sqlite, as it does not support locking.
+			if (ProviderName == GetSqliteProviderName())
+			{
+				Assert.Ignore("Test not supported on sqlite database.");
+				return;
+			}
+
+			var persister = CreatePersister(createTables: true, useLocking: true, useNoWaitLocking: true);
+			var savedSagaData = new MySagaData();
+			var savedSagaDataId = Guid.NewGuid();
+			savedSagaData.Id = savedSagaDataId;
+			persister.Insert(savedSagaData, new string[0]);
+
+			using (_manager.Create())
+			{
+				persister.Find<MySagaData>("Id", savedSagaDataId);
+
+				Assert.Throws<AdoNetSagaLockedException>(() =>
+				{
+				//	using (var thread = new CrossThreadRunner(() =>
+				//	{
+						using (EnterAFakeMessageContext())
+						{
+							persister.Find<MySagaData>("Id", savedSagaDataId);
+						}
+				//	}))
+				//	{
+				//		thread.Run();
+				//	}
+				});
+			}
+		}
 		#endregion
 
 	}

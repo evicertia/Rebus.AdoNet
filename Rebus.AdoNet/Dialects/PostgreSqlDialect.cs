@@ -8,8 +8,13 @@ using Rebus.AdoNet.Schema;
 
 namespace Rebus.AdoNet.Dialects
 {
+	/// <summary>
+	/// Postgre sql dialect, assuming v8.0 as bare minimum.
+	/// </summary>
 	public class PostgreSqlDialect : SqlDialect
 	{
+		protected virtual Version MinimumDatabaseVersion => new Version("8.0");
+
 		public PostgreSqlDialect()
 		{
 
@@ -48,12 +53,20 @@ namespace Rebus.AdoNet.Dialects
 		public override bool SupportsSelectForUpdate => true;
 		public override bool SupportsTryAdvisoryLockFunction => true;
 
+		public override string GetDatabaseVersion(IDbConnection connection)
+		{
+			var result = connection.ExecuteScalar("SHOW server_version;");
+			var versionString = Convert.ToString(result);
+			return versionString.Split(' ').First();
+		}
+
 		public override bool SupportsThisDialect(IDbConnection connection)
 		{
 			try
 			{
 				var versionString = (string)connection.ExecuteScalar(@"SELECT VERSION();");
-				return versionString.StartsWith("PostgreSQL ");
+				var databaseVersion = new Version(this.GetDatabaseVersion(connection));
+				return versionString.StartsWith("PostgreSQL ", StringComparison.Ordinal) && databaseVersion >= MinimumDatabaseVersion;
 			}
 			catch
 			{

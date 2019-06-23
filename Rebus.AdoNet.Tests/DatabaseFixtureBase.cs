@@ -36,7 +36,7 @@ namespace Rebus.AdoNet
 			if (Dialect == null) throw new InvalidOperationException($"No valid dialect detected for: {ProviderName}");
 		}
 
-		private static string GetSqliteProviderName()
+		protected static string GetSqliteProviderName()
 		{
 			switch (Environment.OSVersion.Platform)
 			{

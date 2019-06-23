@@ -78,6 +78,9 @@
     <Compile Include="Reflect.cs" />
     <Compile Include="IDbExtensions.cs" />
     <Compile Include="Dialects\SqlDialect.cs" />
+    <Compile Include="Dialects\PostgreSqlExceptionAdapter.cs" />
+    <Compile Include="GenericExtensions.cs" />
+    <Compile Include="AdoNetSagaLockedException.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

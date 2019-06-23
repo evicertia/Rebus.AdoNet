@@ -131,10 +131,10 @@ namespace Rebus.AdoNet
 			var lockPredicate = string.Empty;
 			var limitPredicate = string.Empty;
 
-			if (dialect.SupportsSelectForUpdate && dialect.SupportsSkipLockedFunction)
+			if (dialect.SupportsSelectForUpdate && dialect.SupportsSelectForWithSkipLocked)
 			{
-				forUpdateStmt = dialect.ParameterSelectForUpdate;
-				skipLockedStmt = dialect.ParameterSkipLocked;
+				forUpdateStmt = dialect.SelectForUpdateClause;
+				skipLockedStmt = dialect.SelectForSkipLockedClause;
 			}
 			else if (dialect.SupportsTryAdvisoryXactLockFunction)
 			{

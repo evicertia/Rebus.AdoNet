@@ -22,6 +22,12 @@ namespace Rebus.AdoNet
 		/// </summary>
 		AdoNetSagaPersisterFluentConfigurer DoNotIndexNullProperties();
 
+		/// <summary>
+		/// Uses locking when retrieving/updating saga data rows from database.
+		/// </summary>
+		/// <returns></returns>
+		/// <param name="waitForLocks">If set to <c>true</c> wait for locks.</param>
+		AdoNetSagaPersisterFluentConfigurer UseLockingOnSagaUpdates(bool waitForLocks);
 
 		/// <summary>
 		/// Customizes the saga names using this customizer.
