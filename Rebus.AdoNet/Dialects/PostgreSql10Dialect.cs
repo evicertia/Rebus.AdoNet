@@ -10,7 +10,7 @@ namespace Rebus.AdoNet.Dialects
 	public class PostgreSql10Dialect : PostgreSql95Dialect
 	{
 		private readonly TypeNames _typeNames = new TypeNames();
-		private Version MinimumDatabaseVersion => new Version("10");
+		protected override Version MinimumDatabaseVersion => new Version("10");
 
 		public override bool SupportsTryAdvisoryXactLockFunction => true;
 		public override ushort Priority => 100;
