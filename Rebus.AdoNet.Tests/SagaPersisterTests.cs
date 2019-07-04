@@ -209,6 +209,7 @@ namespace Rebus.AdoNet
 		{
 			var result = new AdoNetSagaPersister(_manager, SagaTableName, SagaIndexTableName);
 			if (_useSagaLocking) result.EnableSagaLocking();
+			if (_useSqlArrays) result.UseSqlArraysForCorrelationIndexes();
 			if (createTables) result.EnsureTablesAreCreated();
 			return result;
 		}
