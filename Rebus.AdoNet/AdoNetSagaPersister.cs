@@ -405,11 +405,14 @@ namespace Rebus.AdoNet
 				foreach (var parameter in parameters)
 				{
 					var value = GetIndexValue(parameter.PropertyValue);
-					var values = GetConcatenatedIndexValues(GetIndexValues(parameter.PropertyValue));
+					var values = value == null ? null : ArraysEnabledFor(dialect)
+						? (object)GetIndexValues(parameter.PropertyValue)?.ToArray()
+						: GetConcatenatedIndexValues(GetIndexValues(parameter.PropertyValue));
+					var valuesDbType = ArraysEnabledFor(dialect) ? DbType.Object : DbType.String;
 
 					command.AddParameter(dialect.EscapeParameter(parameter.PropertyNameParameter), DbType.String, parameter.PropertyName);
 					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, value);
-					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValuesParameter), DbType.String, values);
+					command.AddParameter(dialect.EscapeParameter(parameter.PropertyValuesParameter), valuesDbType, values);
 				}
 
 				command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
@@ -520,12 +523,15 @@ namespace Rebus.AdoNet
 					);
 
 					var value = GetIndexValue(propertiesToIndex[key]);
-					var values = GetConcatenatedIndexValues(GetIndexValues(propertiesToIndex[key]));
+					var values = ArraysEnabledFor(dialect)
+						? (object)GetIndexValues(propertiesToIndex[key])?.ToArray()
+						: GetConcatenatedIndexValues(GetIndexValues(propertiesToIndex[key]));
+					var valuesDbType = ArraysEnabledFor(dialect) ? DbType.Object : DbType.String;
 
 					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
 					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN), DbType.String, key);
 					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN), DbType.String, value);
-					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUES_COLUMN), DbType.String, values);
+					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUES_COLUMN), valuesDbType, values);
 
 					try
 					{
@@ -614,7 +620,6 @@ namespace Rebus.AdoNet
 							? (object)GetIndexValues(parameter.PropertyValue)?.ToArray()
 							: GetConcatenatedIndexValues(GetIndexValues(parameter.PropertyValue));
 						var valuesDbType = ArraysEnabledFor(dialect) ? DbType.Object : DbType.String;
-						//var values = GetConcatenatedIndexValues(GetIndexValues(parameter.PropertyValue));
 
 						command.AddParameter(dialect.EscapeParameter(parameter.PropertyNameParameter), DbType.String, parameter.PropertyName);
 						command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, value);
@@ -779,14 +784,14 @@ namespace Rebus.AdoNet
 							{forUpdate};".Replace("\t", "");
 
 						var value = GetIndexValue(fieldFromMessage);
-						var values = value == null ? null : dialect.SupportsArrayTypes
+						var values = value == null ? null : ArraysEnabledFor(dialect)
 							? (object)(new[] { value })
 							: GetConcatenatedIndexValues(new[] { value });
-						var dbtype = ArraysEnabledFor(dialect) ? DbType.Object : DbType.String;
+						var valuesDbType = ArraysEnabledFor(dialect) ? DbType.Object : DbType.String;
 
 						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN), sagaDataPropertyPath);
 						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN), DbType.String, value);
-						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUES_COLUMN), dbtype, values);
+						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUES_COLUMN), valuesDbType, values);
 					}
 
 					string data = null;
