@@ -40,10 +40,10 @@ namespace Rebus.AdoNet
 		private readonly string sagaTableName;
 		private readonly string idPropertyName;
 		private bool useSagaLocking;
-		private bool useSqlArrays = false;
+		private bool useSqlArrays;
 		private bool useNoWaitSagaLocking;
 		private bool indexNullProperties = true;
-		private Func<Type, string> sagaNameCustomizer = null;
+		private Func<Type, string> sagaNameCustomizer;
 
 		static AdoNetSagaPersister()
 		{
@@ -109,6 +109,11 @@ namespace Rebus.AdoNet
 						sagaIndexTableIsAlreadyCreated ? sagaTableName : sagaIndexTableName));
 				}
 
+				if (useSqlArrays && !dialect.SupportsArrayTypes)
+				{
+					throw new ApplicationException("Enabled UseSqlArraysForCorrelationIndexes but underlaying database does not support arrays?!");
+				}
+
 				log.Info("Tables '{0}' and '{1}' do not exist - they will be created now", sagaTableName, sagaIndexTableName);
 
 				using (var command = connection.CreateCommand())
@@ -141,7 +146,7 @@ namespace Rebus.AdoNet
 								new AdoNetColumn() { Name = SAGAINDEX_ID_COLUMN, DbType = DbType.Guid },
 								new AdoNetColumn() { Name = SAGAINDEX_KEY_COLUMN, DbType = DbType.String, Length = 200  },
 								new AdoNetColumn() { Name = SAGAINDEX_VALUE_COLUMN, DbType = DbType.String, Length = 200, Nullable = true },
-								new AdoNetColumn() { Name = SAGAINDEX_VALUES_COLUMN, DbType = DbType.String, Length = 65535, Nullable = true, Array = dialect.SupportsArrayTypes }
+								new AdoNetColumn() { Name = SAGAINDEX_VALUES_COLUMN, DbType = DbType.String, Length = 65535, Nullable = true, Array = useSqlArrays }
 							},
 							PrimaryKey = new[] { SAGAINDEX_ID_COLUMN, SAGAINDEX_KEY_COLUMN },
 							Indexes = new []
@@ -605,11 +610,15 @@ namespace Rebus.AdoNet
 					foreach (var parameter in parameters)
 					{
 						var value = GetIndexValue(parameter.PropertyValue);
-						var values = GetConcatenatedIndexValues(GetIndexValues(parameter.PropertyValue));
+						var values = ArraysEnabledFor(dialect)
+							? (object)GetIndexValues(parameter.PropertyValue)?.ToArray()
+							: GetConcatenatedIndexValues(GetIndexValues(parameter.PropertyValue));
+						var valuesDbType = ArraysEnabledFor(dialect) ? DbType.Object : DbType.String;
+						//var values = GetConcatenatedIndexValues(GetIndexValues(parameter.PropertyValue));
 
 						command.AddParameter(dialect.EscapeParameter(parameter.PropertyNameParameter), DbType.String, parameter.PropertyName);
 						command.AddParameter(dialect.EscapeParameter(parameter.PropertyValueParameter), DbType.String, value);
-						command.AddParameter(dialect.EscapeParameter(parameter.PropertyValuesParameter), DbType.String, values);
+						command.AddParameter(dialect.EscapeParameter(parameter.PropertyValuesParameter), valuesDbType, values);
 					}
 
 					command.AddParameter(dialect.EscapeParameter(SAGAINDEX_ID_COLUMN), DbType.Guid, sagaData.Id);
