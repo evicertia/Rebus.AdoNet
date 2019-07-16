@@ -205,7 +205,7 @@ namespace Rebus.AdoNet
 			return @base.Union(extra1).Union(extra2).Union(extra3);
 		}
 
-		protected AdoNetSagaPersister CreatePersister(bool createTables = false)
+		protected AdoNetSagaPersister CreatePersister(bool createTables = false, bool useLocking = false, bool useNoWaitLocking = false)
 		{
 			var result = new AdoNetSagaPersister(_manager, SagaTableName, SagaIndexTableName);
 			if (_useSqlArrays) result.UseSqlArraysForCorrelationIndexes();

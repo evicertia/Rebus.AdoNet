@@ -49,10 +49,10 @@ namespace Rebus.AdoNet.Dialects
 
 		}
 		public override bool SupportsSelectForUpdate => true;
+		public override string SelectForUpdateClause => "FOR UPDATE";
 
 		#region Overrides
 		public override ushort Priority => 01;
-		public override string ParameterSelectForUpdate => "FOR UPDATE";
 
 		public override string GetDatabaseVersion(IDbConnection connection)
 		{
