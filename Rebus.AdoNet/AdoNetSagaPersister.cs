@@ -145,8 +145,8 @@ namespace Rebus.AdoNet
 							{
 								new AdoNetColumn() { Name = SAGAINDEX_ID_COLUMN, DbType = DbType.Guid },
 								new AdoNetColumn() { Name = SAGAINDEX_KEY_COLUMN, DbType = DbType.String, Length = 200  },
-								new AdoNetColumn() { Name = SAGAINDEX_VALUE_COLUMN, DbType = DbType.String, Length = 200, Nullable = true },
-								new AdoNetColumn() { Name = SAGAINDEX_VALUES_COLUMN, DbType = DbType.String, Length = 65535, Nullable = true, Array = useSqlArrays }
+								new AdoNetColumn() { Name = SAGAINDEX_VALUE_COLUMN, DbType = DbType.String, Length = 1073741823, Nullable = true },
+								new AdoNetColumn() { Name = SAGAINDEX_VALUES_COLUMN, DbType = DbType.String, Length = 1073741823, Nullable = true, Array = useSqlArrays }
 							},
 							PrimaryKey = new[] { SAGAINDEX_ID_COLUMN, SAGAINDEX_KEY_COLUMN },
 							Indexes = new []
