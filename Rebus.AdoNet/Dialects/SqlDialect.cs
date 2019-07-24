@@ -91,17 +91,37 @@ namespace Rebus.AdoNet.Dialects
 		/// Get the column type of corresponding to the specified parameters.
 		/// <see cref="SqlType"/>.
 		/// </summary>
-		/// <param name="sqlType">The SqlType </param>
+		/// <param name="type">The SqlType </param>
+		public virtual string GetColumnType(DbType type)
+		{
+			return _typeNames.Get(type);
+		}
+
+		/// <summary>
+		/// Get the column type of corresponding to the specified parameters.
+		/// <see cref="SqlType"/>.
+		/// </summary>
+		/// <param name="type">The SqlType </param>
 		/// <param name="length">The datatype length </param>
 		/// <param name="precision">The datatype precision </param>
 		/// <param name="scale">The datatype scale </param>
 		/// <returns>The database type name used by ddl.</returns>
-		public virtual string GetColumnType(DbType type, uint length, uint precision, uint scale, bool identity, bool primary)
+		public virtual string GetColumnType(DbType type, uint length, uint precision, uint scale, bool identity, bool array, bool primary)
 		{
 			string result = identity ? GetIdentityTypeFor(type) : _typeNames.Get(type, length, precision, scale);
 			if (result == null)
 			{
 				throw new ArgumentOutOfRangeException($"No type mapping for DbType {type} of length {length}");
+			}
+
+			if (array && !SupportsArrayTypes)
+			{
+				throw new NotSupportedException($"Dialect {GetType().Name} does not support array types.");
+			}
+
+			if (array)
+			{
+				result = result += "[]";
 			}
 
 			if (primary) result += " PRIMARY KEY";
@@ -395,7 +415,7 @@ namespace Rebus.AdoNet.Dialects
 
 				sb.AppendFormat(" {0} {1} {2} {3}",
 					QuoteForColumnName(column.Name),
-					GetColumnType(column.DbType, column.Length, column.Precision, column.Scale, column.Identity, primaryKey),
+					GetColumnType(column.DbType, column.Length, column.Precision, column.Scale, column.Identity, column.Array, primaryKey),
 					column.Nullable ? "" : "NOT NULL",
 					(table.Columns.Last() == column) ? "" : ","
 				);
@@ -480,6 +500,15 @@ namespace Rebus.AdoNet.Dialects
 
 		#region On Conflict Clause
 		public virtual bool SupportsOnConflictClause => false;
+		#endregion
+
+		#region Arrays Support
+		public virtual bool SupportsArrayTypes => false;
+
+		public virtual string FormatArrayAny(string arg1, string arg2)
+		{
+			throw new NotSupportedException("ArrayAny function not supported by this dialect.");
+		}
 		#endregion
 
 		#region SqlDialects Registry

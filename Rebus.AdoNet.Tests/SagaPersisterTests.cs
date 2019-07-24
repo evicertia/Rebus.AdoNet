@@ -1,11 +1,13 @@
 ﻿using System;
 using System.IO;
 using System.Data;
+using System.Linq;
 using System.Collections.Generic;
 using System.Reflection;
 
 using Common.Logging;
 using NUnit.Framework;
+using NUnit.Framework.Constraints;
 using Rhino.Mocks;
 
 using Rebus;
@@ -15,7 +17,7 @@ using Rebus.Shared;
 
 namespace Rebus.AdoNet
 {
-	[TestFixtureSource(typeof(DatabaseFixtureBase), nameof(DatabaseFixtureBase.ConnectionSources))]
+	[TestFixtureSource(typeof(SagaPersisterTests), nameof(SagaPersisterTests.GetConnectionSources))]
 	public class SagaPersisterTests : DatabaseFixtureBase
 	{
 		#region Inner Types
@@ -112,12 +114,16 @@ namespace Rebus.AdoNet
 
 		private AdoNetConnectionFactory _factory;
 		private AdoNetUnitOfWorkManager _manager;
+		private readonly bool _useSagaLocking = false;
+		private readonly bool _useSqlArrays = false;
 		private const string SagaTableName = "Sagas";
 		private const string SagaIndexTableName = "SagasIndex";
 
-		public SagaPersisterTests(string provider, string connectionString)
+		public SagaPersisterTests(string provider, string connectionString, bool locking, bool arrays)
 			: base(provider, connectionString)
 		{
+			_useSagaLocking = locking;
+			_useSqlArrays = arrays;
 		}
 
 		#region Message Context Helpers
@@ -180,9 +186,29 @@ namespace Rebus.AdoNet
 			}
 		}
 
+		public static IEnumerable<object[]> GetConnectionSources()
+		{
+			var sources = DatabaseFixtureBase.ConnectionSources()
+				.Select(x => new
+				{
+					Provider = x[0],
+					ConnectionString = x[1],
+					SupportsLocking = DatabaseFixtureBase.NPGSQL_PROVIDER_NAME == (string)x[0],
+					SupportsArrays = DatabaseFixtureBase.NPGSQL_PROVIDER_NAME == (string)x[0]
+				});
+
+			var @base = sources.Select(x => new[] { x.Provider, x.ConnectionString, false, false });
+			var extra1 = sources.Where(x => x.SupportsLocking).Select(x => new[] { x.Provider, x.ConnectionString, true, false });
+			var extra2 = sources.Where(x => x.SupportsArrays).Select(x => new[] { x.Provider, x.ConnectionString, false, true });
+			var extra3 = sources.Where(x => x.SupportsLocking && x.SupportsArrays).Select(x => new[] { x.Provider, x.ConnectionString, true, true });
+
+			return @base.Union(extra1).Union(extra2).Union(extra3);
+		}
+
 		protected AdoNetSagaPersister CreatePersister(bool createTables = false, bool useLocking = false, bool useNoWaitLocking = false)
 		{
 			var result = new AdoNetSagaPersister(_manager, SagaTableName, SagaIndexTableName);
+			if (_useSqlArrays) result.UseSqlArraysForCorrelationIndexes();
 			if (createTables) result.EnsureTablesAreCreated();
 			if (useLocking) result.UseLockingOnSagaUpdates(!useNoWaitLocking);
 			return result;
@@ -361,38 +387,11 @@ namespace Rebus.AdoNet
 		}
 
 		[Test]
-		public void EnsuresUniquenessAlsoOnCorrelationPropertyWithNull()
-		{
-			var persister = CreatePersister(createTables: true);
-			var propertyName = Reflect.Path<SomePieceOfSagaData>(d => d.PropertyThatCanBeNull);
-			var dataWithIndexedNullProperty = new SomePieceOfSagaData { SomeValueWeCanRecognize = "hello" };
-			var anotherPieceOfDataWithIndexedNullProperty = new SomePieceOfSagaData { SomeValueWeCanRecognize = "hello" };
-
-			persister.Insert(dataWithIndexedNullProperty, new[] { propertyName });
-
-			Assert.Throws<OptimisticLockingException>(() => persister.Insert(anotherPieceOfDataWithIndexedNullProperty, new[] { propertyName }));
-		}
-
-		[Test]
-		[Ignore("Test doesn't pass as value is now not part of the primary key")]
-		public void EnsuresUniquenessAlsoOnCorrelationPropertyWithNull2()
-		{
-			var persister = CreatePersister(createTables: true);
-			var propertyName = Reflect.Path<SomePieceOfSagaData>(d => d.PropertyThatCanBeNull);
-			var dataWithIndexedNullProperty = new SomePieceOfSagaData { Id = Guid.NewGuid(), SomeValueWeCanRecognize = "hello" };
-			var anotherPieceOfDataWithIndexedNullProperty = new SomePieceOfSagaData { Id = Guid.NewGuid(), SomeValueWeCanRecognize = "hello" };
-
-			persister.Insert(dataWithIndexedNullProperty, new[] { propertyName });
-
-			Assert.Throws<OptimisticLockingException>(() => persister.Insert(anotherPieceOfDataWithIndexedNullProperty, new[] { propertyName }));
-		}
-
-		[Test]
 		public void CanFindAndUpdateSagaDataByCorrelationPropertyWithNull()
 		{
 			var persister = CreatePersister(createTables: true);
 			var propertyName = Reflect.Path<SomePieceOfSagaData>(d => d.PropertyThatCanBeNull);
-			var dataWithIndexedNullProperty = new SomePieceOfSagaData { SomeValueWeCanRecognize = "hello" };
+			var dataWithIndexedNullProperty = new SomePieceOfSagaData { Id = Guid.NewGuid(), SomeValueWeCanRecognize = "hello" };
 
 			persister.Insert(dataWithIndexedNullProperty, new[] { propertyName });
 			var sagaDataFoundViaNullProperty = persister.Find<SomePieceOfSagaData>(propertyName, null);
@@ -502,7 +501,6 @@ namespace Rebus.AdoNet
 		}
 
 		[Test]
-		[Ignore("Ignore test pending to implement IEnumerable correlations as arrays")]
 		public void CanFindSagaWithIEnumerableAsCorrelatorId()
 		{
 			var persister = CreatePersister(createTables: true);
@@ -515,7 +513,7 @@ namespace Rebus.AdoNet
 
 			Assert.That(dataViaNonexistentField, Is.Null);
 			Assert.That(dataViaNonexistentValue, Is.Null);
-			Assert.That(mySagaData.SomeField, Is.EqualTo("3"));
+			Assert.That(mySagaData?.SomeField, Is.EqualTo("3"));
 		}
 
 		[Test]
@@ -571,46 +569,6 @@ namespace Rebus.AdoNet
 			public string SomeCorrelationId { get; set; }
 		}
 
-		[Test, Description("We don't allow two sagas to have the same value of a property that is used to correlate with incoming messages, " +
-						   "because that would cause an ambiguity if an incoming message suddenly mathed two or more sagas... " +
-						   "moreover, e.g. MongoDB would not be able to handle the message and update multiple sagas reliably because it doesn't have transactions.")]
-		[Ignore("Test doesn't pass as value is now not part of the primary key")]
-		public void CannotInsertAnotherSagaWithDuplicateCorrelationId()
-		{
-			// arrange
-			var persister = CreatePersister(createTables: true);
-			var theValue = "this just happens to be the same in two sagas";
-			var firstSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
-			var secondSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
-
-			var pathsToIndex = new[] { Reflect.Path<SomeSaga>(s => s.SomeCorrelationId) };
-			persister.Insert(firstSaga, pathsToIndex);
-
-			// act
-			// assert
-			Assert.Throws<OptimisticLockingException>(() => persister.Insert(secondSaga, pathsToIndex));
-		}
-
-		[Test]
-		[Ignore("Test doesn't pass as value is now not part of the primary key")]
-		public void CannotUpdateAnotherSagaWithDuplicateCorrelationId()
-		{
-			// arrange  
-			var persister = CreatePersister(createTables: true);
-			var theValue = "this just happens to be the same in two sagas";
-			var firstSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
-			var secondSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = "other value" };
-
-			var pathsToIndex = new[] { Reflect.Path<SomeSaga>(s => s.SomeCorrelationId) };
-			persister.Insert(firstSaga, pathsToIndex);
-			persister.Insert(secondSaga, pathsToIndex);
-
-			// act
-			// assert
-			secondSaga.SomeCorrelationId = theValue;
-			Assert.Throws<OptimisticLockingException>(() => persister.Update(secondSaga, pathsToIndex));
-		}
-
 		[Test]
 		public void CanUpdateSaga()
 		{
@@ -628,6 +586,125 @@ namespace Rebus.AdoNet
 
 			Assert.DoesNotThrow(() => persister.Update(sagaToUpdate, pathsToIndex));
 		}
+
+		[Test, Description("We don't allow two sagas to have the same value of a property that is used to correlate with incoming messages, " +
+						   "because that would cause an ambiguity if an incoming message suddenly mathed two or more sagas... " +
+						   "moreover, e.g. MongoDB would not be able to handle the message and update multiple sagas reliably because it doesn't have transactions.")]
+		public void CannotInsertAnotherSagaWithDuplicateCorrelationId()
+		{
+			// arrange
+			var persister = CreatePersister(createTables: true);
+			var theValue = "this just happens to be the same in two sagas";
+			var firstSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
+			var secondSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
+
+			if (persister is ICanUpdateMultipleSagaDatasAtomically)
+			{
+				Assert.Ignore("Ignore test as persister does actually support multiple saga to be updated automically.");
+				return;
+			}
+
+			var pathsToIndex = new[] { Reflect.Path<SomeSaga>(s => s.SomeCorrelationId) };
+			persister.Insert(firstSaga, pathsToIndex);
+
+			// act
+			// assert
+			Assert.Throws<OptimisticLockingException>(() => persister.Insert(secondSaga, pathsToIndex));
+		}
+
+		[Test]
+		public void CannotUpdateAnotherSagaWithDuplicateCorrelationId()
+		{
+			// arrange  
+			var persister = CreatePersister(createTables: true);
+			var theValue = "this just happens to be the same in two sagas";
+			var firstSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
+			var secondSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = "other value" };
+
+			if (persister is ICanUpdateMultipleSagaDatasAtomically)
+			{
+				Assert.Ignore("Ignore test as persister does actually support multiple saga to be updated automically.");
+				return;
+			}
+
+			var pathsToIndex = new[] { Reflect.Path<SomeSaga>(s => s.SomeCorrelationId) };
+			persister.Insert(firstSaga, pathsToIndex);
+			persister.Insert(secondSaga, pathsToIndex);
+
+			// act
+			// assert
+			secondSaga.SomeCorrelationId = theValue;
+			Assert.Throws<OptimisticLockingException>(() => persister.Update(secondSaga, pathsToIndex));
+		}
+
+		[Test]
+		[Description("This is the opposite of CannotInsertAnotherSagaWithDuplicateCorrelationId, for persistes supporting atomic saga updates.")]
+		public void CanInsertAnotherSagaWithDuplicateCorrelationId()
+		{
+			// arrange
+			var persister = CreatePersister(createTables: true);
+			var theValue = "this just happens to be the same in two sagas";
+			var firstSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
+			var secondSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
+
+			if (!(persister is ICanUpdateMultipleSagaDatasAtomically))
+			{
+				Assert.Ignore("Ignore test as persister does not support multiple saga to be updated automically.");
+				return;
+			}
+
+			var pathsToIndex = new[] { Reflect.Path<SomeSaga>(s => s.SomeCorrelationId) };
+
+			// act
+			persister.Insert(firstSaga, pathsToIndex);
+			persister.Insert(secondSaga, pathsToIndex);
+
+			// assert
+		}
+
+		[Test]
+		public void CanUpdateAnotherSagaWithDuplicateCorrelationId()
+		{
+			// arrange  
+			var persister = CreatePersister(createTables: true);
+			var theValue = "this just happens to be the same in two sagas";
+			var firstSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
+			var secondSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = "other value" };
+
+			if (!(persister is ICanUpdateMultipleSagaDatasAtomically))
+			{
+				Assert.Ignore("Ignore test as persister does not support multiple saga to be updated automically.");
+				return;
+			}
+
+			var pathsToIndex = new[] { Reflect.Path<SomeSaga>(s => s.SomeCorrelationId) };
+
+			// act
+			persister.Insert(firstSaga, pathsToIndex);
+			persister.Insert(secondSaga, pathsToIndex);
+
+			secondSaga.SomeCorrelationId = theValue;
+			persister.Update(secondSaga, pathsToIndex);
+
+			// assert
+		}
+
+		[Test]
+		public void EnsuresUniquenessAlsoOnCorrelationPropertyWithNull()
+		{
+			var persister = CreatePersister(createTables: true);
+			var propertyName = Reflect.Path<SomePieceOfSagaData>(d => d.PropertyThatCanBeNull);
+			var dataWithIndexedNullProperty = new SomePieceOfSagaData { Id = Guid.NewGuid(), SomeValueWeCanRecognize = "hello" };
+			var anotherPieceOfDataWithIndexedNullProperty = new SomePieceOfSagaData { Id = Guid.NewGuid(), SomeValueWeCanRecognize = "hello" };
+
+			persister.Insert(dataWithIndexedNullProperty, new[] { propertyName });
+
+			Assert.That(
+				() => persister.Insert(anotherPieceOfDataWithIndexedNullProperty, new[] { propertyName }),
+				(persister is ICanUpdateMultipleSagaDatasAtomically) ? (IResolveConstraint)Throws.Nothing : Throws.Exception
+			);
+		}
+
 		#endregion
 
 		#region Optimistic Concurrency

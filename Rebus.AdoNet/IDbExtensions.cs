@@ -62,7 +62,7 @@ namespace Rebus.AdoNet
 		{
 			var param = command.CreateParameter();
 			param.ParameterName = name;
-			param.Value = value;
+			param.Value = value ?? DBNull.Value;
 			param.DbType = type.GetValueOrDefault(param.DbType);
 			command.Parameters.Add(param);
 		}

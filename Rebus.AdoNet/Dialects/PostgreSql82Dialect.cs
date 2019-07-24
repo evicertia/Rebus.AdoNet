@@ -23,19 +23,5 @@ namespace Rebus.AdoNet.Dialects
 
 			return false;
 		}
-
-		public override bool SupportsThisDialect(IDbConnection connection)
-		{
-			try
-			{
-				var versionString = (string)connection.ExecuteScalar(@"SELECT VERSION();");
-				var databaseVersion = new Version(this.GetDatabaseVersion(connection));
-				return versionString.StartsWith("PostgreSQL ", StringComparison.Ordinal) && databaseVersion >= MinimumDatabaseVersion;
-			}
-			catch
-			{
-				return false;
-			}
-		}
 	}
 }

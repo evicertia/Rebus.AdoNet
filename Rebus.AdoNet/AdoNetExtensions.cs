@@ -36,7 +36,7 @@ namespace Rebus.AdoNet
 		/// </summary>
 		public static AdoNetSagaPersisterFluentConfigurer StoreInAdoNet(this RebusSagasConfigurer configurer, string connectionStringName, string sagaTable, string sagaIndexTable, UOWCreatorDelegate unitOfWorkCreator = null)
 		{
-			if(unitOfWorkCreator == null) unitOfWorkCreator = (fact, cont) => new AdoNetUnitOfWork(fact, cont);
+			if (unitOfWorkCreator == null) unitOfWorkCreator = (fact, cont) => new AdoNetUnitOfWork(fact, cont);
 
 			var connString = GetConnectionString(connectionStringName);
 			var factory = new AdoNetConnectionFactory(connString.ConnectionString, connString.ProviderName);

@@ -56,7 +56,7 @@ namespace Rebus.AdoNet.Dialects
 		/// <returns></returns>
 		private static string ReplaceOnce(string template, string placeholder, string replacement)
 		{
-			int loc = template.IndexOf(placeholder);
+			int loc = template.IndexOf(placeholder, StringComparison.Ordinal);
 			if (loc < 0)
 			{
 				return template;

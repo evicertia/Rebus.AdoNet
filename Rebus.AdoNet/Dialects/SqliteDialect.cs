@@ -60,11 +60,11 @@ namespace Rebus.AdoNet.Dialects
 			return true;
 		}
 
-		public override string GetColumnType(DbType type, uint length, uint precision, uint scale, bool identity, bool primary)
+		public override string GetColumnType(DbType type, uint length, uint precision, uint scale, bool identity, bool array, bool primary)
 		{
 			return identity ?
 				"INTEGER PRIMARY KEY AUTOINCREMENT" //< This is all you can get from sqlite's identity/auto-increment support.
-				: base.GetColumnType(type, length, precision, scale, identity, primary);
+				: base.GetColumnType(type, length, precision, scale, identity, array, primary);
 		}
 	}
 }
