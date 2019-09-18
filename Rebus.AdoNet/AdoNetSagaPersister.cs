@@ -129,7 +129,11 @@ namespace Rebus.AdoNet
 								new AdoNetColumn() { Name = SAGA_REVISION_COLUMN, DbType = DbType.Int32 },
 								new AdoNetColumn() { Name = SAGA_DATA_COLUMN, DbType = DbType.String, Length = 1073741823 }
 							},
-							PrimaryKey = new[] { SAGA_ID_COLUMN }
+							PrimaryKey = new[] { SAGA_ID_COLUMN },
+							Indexes = new []
+							{
+								new AdoNetIndex() { Name = $"ix_{sagaTableName}_{SAGA_ID_COLUMN}_{SAGA_TYPE_COLUMN}", Columns = new [] { SAGA_ID_COLUMN, SAGA_TYPE_COLUMN } },
+							}
 						}
 					);
 					command.ExecuteNonQuery();
@@ -151,9 +155,17 @@ namespace Rebus.AdoNet
 							PrimaryKey = new[] { SAGAINDEX_ID_COLUMN, SAGAINDEX_KEY_COLUMN },
 							Indexes = new []
 							{
-								new AdoNetIndex() { Name = "ix_sagaindexes_id", Columns = new[] { SAGAINDEX_ID_COLUMN } },
-								new AdoNetIndex() { Name = "ix_sagaindexes_key_value", Columns = new[] { SAGAINDEX_KEY_COLUMN, SAGAINDEX_VALUE_COLUMN } },
-								new AdoNetIndex() { Name = "ix_sagaindexes_key_values", Columns = new[] { SAGAINDEX_KEY_COLUMN, SAGAINDEX_VALUES_COLUMN } }
+								new AdoNetIndex() { Name = $"ix_{sagaIndexTableName}_{SAGAINDEX_ID_COLUMN}", Columns = new[] { SAGAINDEX_ID_COLUMN } },
+								new AdoNetIndex()
+								{
+									Name = $"ix_{sagaIndexTableName}_{SAGAINDEX_KEY_COLUMN}_{SAGAINDEX_VALUE_COLUMN}",
+									Columns = new[] { SAGAINDEX_KEY_COLUMN, SAGAINDEX_VALUE_COLUMN }
+								},
+								new AdoNetIndex()
+								{
+									Name = $"ix_{sagaIndexTableName}_{SAGAINDEX_KEY_COLUMN}_{SAGAINDEX_VALUES_COLUMN}",
+									Columns = new[] { SAGAINDEX_KEY_COLUMN, SAGAINDEX_VALUES_COLUMN }
+								}
 							}
 						}
 					);
@@ -754,6 +766,8 @@ namespace Rebus.AdoNet
 					{
 						var dataCol = dialect.QuoteForColumnName(SAGA_DATA_COLUMN);
 						var sagaTblName = dialect.QuoteForTableName(sagaTableName);
+						var sagaTypeCol = dialect.QuoteForColumnName(SAGA_TYPE_COLUMN);
+						var sagaTypeParam = dialect.EscapeParameter(SAGA_TYPE_COLUMN);
 						var indexTblName = dialect.QuoteForTableName(sagaIndexTableName);
 						var sagaIdCol = dialect.QuoteForColumnName(SAGA_ID_COLUMN);
 						var indexIdCol = dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN);
@@ -772,9 +786,10 @@ namespace Rebus.AdoNet
 							SELECT s.{dataCol}
 							FROM {sagaTblName} s
 							JOIN {indexTblName} i on s.{sagaIdCol} = i.{indexIdCol}
-							WHERE i.{indexKeyCol} = {indexKeyParam}
-							  AND (
-							  		CASE WHEN {indexValueParm} IS NULL THEN i.{indexValueCol} IS NULL
+							WHERE s.{sagaTypeCol} = {sagaTypeParam}
+								AND i.{indexKeyCol} = {indexKeyParam}
+								AND (
+									CASE WHEN {indexValueParm} IS NULL THEN i.{indexValueCol} IS NULL
 									ELSE 
 										(
 											i.{indexValueCol} = {indexValueParm}
@@ -791,9 +806,10 @@ namespace Rebus.AdoNet
 							: GetConcatenatedIndexValues(new[] { value });
 						var valuesDbType = ArraysEnabledFor(dialect) ? DbType.Object : DbType.String;
 
-						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN), sagaDataPropertyPath);
-						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN), DbType.String, value);
-						command.AddParameter(dialect.EscapeParameter(SAGAINDEX_VALUES_COLUMN), valuesDbType, values);
+						command.AddParameter(indexKeyParam, sagaDataPropertyPath);
+						command.AddParameter(sagaTypeParam, sagaType);
+						command.AddParameter(indexValueParm, DbType.String, value);
+						command.AddParameter(indexValuesParm, valuesDbType, values);
 					}
 
 					string data = null;
