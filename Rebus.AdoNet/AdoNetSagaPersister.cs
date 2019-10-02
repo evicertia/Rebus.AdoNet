@@ -752,11 +752,13 @@ namespace Rebus.AdoNet
 						var sagaTypeParam = dialect.EscapeParameter(SAGA_TYPE_COLUMN);
 
 						command.CommandText = string.Format(
-							@"SELECT s.{0} FROM {1} s WHERE s.{2} = {3} {4}",
+							@"SELECT s.{0} FROM {1} s WHERE s.{2} = {3} AND s.{4} = {5} {6}",
 							dialect.QuoteForColumnName(SAGA_DATA_COLUMN),
 							dialect.QuoteForTableName(sagaTableName),
 							dialect.QuoteForColumnName(SAGA_ID_COLUMN),
 							idParam,
+							dialect.QuoteForColumnName(SAGA_TYPE_COLUMN),
+							sagaTypeParam,
 							GetSagaLockingClause(dialect)
 						);
 						command.AddParameter(sagaTypeParam, sagaType);
