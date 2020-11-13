@@ -155,7 +155,6 @@ namespace Rebus.AdoNet
 							PrimaryKey = new[] { SAGAINDEX_ID_COLUMN, SAGAINDEX_KEY_COLUMN },
 							Indexes = new []
 							{
-								new AdoNetIndex() { Name = $"ix_{sagaIndexTableName}_{SAGAINDEX_ID_COLUMN}", Columns = new[] { SAGAINDEX_ID_COLUMN } },
 								new AdoNetIndex()
 								{
 									Name = $"ix_{sagaIndexTableName}_{SAGAINDEX_KEY_COLUMN}_{SAGAINDEX_VALUE_COLUMN}",
