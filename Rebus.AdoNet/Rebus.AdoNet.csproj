@@ -66,6 +66,7 @@
     <Compile Include="Dialects\SqliteDialect.cs" />
     <Compile Include="Dialects\TypeNames.cs" />
     <Compile Include="AdoNetUnitOfWork.cs" />
+    <Compile Include="Dialects\YugabyteDbDialect.cs" />
     <Compile Include="netfx\System\Guard.cs" />
     <Compile Include="Schema\AdoNetColumn.cs" />
     <Compile Include="Schema\AdoNetIndex.cs" />
