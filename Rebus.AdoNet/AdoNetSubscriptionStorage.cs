@@ -143,5 +143,11 @@ CREATE TABLE ""{0}"" (
 
 			return this;
 		}
+
+		public AdoNetSubscriptionStorageFluentConfigurer CustomizeOpenedConnections(Action<IDbConnection> customizer)
+		{
+			factory.ConnectionCustomizer = customizer;
+			return this;
+		}
 	}
 }

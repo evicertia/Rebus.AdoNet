@@ -14,7 +14,8 @@ namespace Rebus.AdoNet
 	/// <summary>
 	/// Implements a timeout storage for Rebus that stores sagas in AdoNet.
 	/// </summary>
-	public class AdoNetTimeoutStorage : IStoreTimeouts, AdoNetTimeoutStorageFluentConfigurer
+	public class AdoNetTimeoutStorage : IStoreTimeouts,
+		AdoNetTimeoutStorageFluentConfigurer
 	{
 		static ILog log;
 
@@ -247,6 +248,12 @@ namespace Rebus.AdoNet
 
 			}
 
+			return this;
+		}
+
+		public AdoNetTimeoutStorageFluentConfigurer CustomizeOpenedConnections(Action<IDbConnection> customizer)
+		{
+			factory.ConnectionCustomizer = customizer;
 			return this;
 		}
 

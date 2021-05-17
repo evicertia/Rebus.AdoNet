@@ -18,7 +18,6 @@ namespace Rebus.AdoNet
 		private static ILog _log;
 		private readonly DbProviderFactory _factory;
 		private readonly string _connectionString;
-		private readonly string _providerName;
 		private readonly SqlDialect _dialect;
 
 		public SqlDialect Dialect => _dialect;
@@ -26,13 +25,13 @@ namespace Rebus.AdoNet
 		static AdoNetConnectionFactory()
 		{
 			RebusLoggerFactory.Changed += f => _log = f.GetCurrentClassLogger();
-
 		}
+
+		internal Action<IDbConnection> ConnectionCustomizer { get; set; }
 
 		public AdoNetConnectionFactory(string connectionString, string providerName)
 		{
 			_connectionString = connectionString;
-			_providerName = providerName;
 			_factory = DbProviderFactories.GetFactory(providerName);
 			_dialect = SqlDialect.GetDialectFor(_factory, connectionString);
 
@@ -43,7 +42,9 @@ namespace Rebus.AdoNet
 
 		public IDbConnection OpenConnection()
 		{
-			return _factory.OpenConnection(_connectionString);
+			var result = _factory.OpenConnection(_connectionString);
+			ConnectionCustomizer?.Invoke(result);
+			return result;
 		}
 	}
 }

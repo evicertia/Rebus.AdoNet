@@ -20,6 +20,8 @@ namespace Rebus.AdoNet
 		private readonly AdoNetConnectionFactory _factory;
 		private readonly UOWCreatorDelegate _unitOfWorkCreator;
 
+		internal AdoNetConnectionFactory ConnectionFactory => _factory;
+
 		public AdoNetUnitOfWorkManager(AdoNetConnectionFactory factory, UOWCreatorDelegate unitOfWorkCreator)
 		{
 			Guard.NotNull(() => factory, factory);

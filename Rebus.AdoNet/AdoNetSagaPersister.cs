@@ -208,6 +208,17 @@ namespace Rebus.AdoNet
 			return this;
 		}
 
+		/// <summary>
+		/// Allows customizing opened connections by passing a delegate/lambda to invoke for each new connection.
+		/// </summary>
+		/// <param name="customizer"></param>
+		/// <returns></returns>
+		public AdoNetSagaPersisterFluentConfigurer CustomizeOpenedConnections(Action<IDbConnection> customizer)
+		{
+			manager.ConnectionFactory.ConnectionCustomizer = customizer;
+			return this;
+		}
+
 		#endregion
 
 		public void Insert(ISagaData sagaData, string[] sagaDataPropertyPathsToIndex)

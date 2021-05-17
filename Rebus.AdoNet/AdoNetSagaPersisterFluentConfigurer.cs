@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Data;
 
 namespace Rebus.AdoNet
 {
@@ -47,5 +48,12 @@ namespace Rebus.AdoNet
 		/// </summary>
 		/// <returns>The sql arrays.</returns>
 		AdoNetSagaPersisterFluentConfigurer UseSqlArraysForCorrelationIndexes();
+
+		/// <summary>
+		/// Customizes opened IDbConnections before usage.
+		/// </summary>
+		/// <param name="customizer">Delegate to invoke for each opened IDbConnection</param>
+		/// <returns></returns>
+		AdoNetSagaPersisterFluentConfigurer CustomizeOpenedConnections(Action<IDbConnection> customizer);
 	}
 }
