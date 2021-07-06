@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Data;
 using System.Linq;
 using System.Data.Common;
@@ -10,6 +10,7 @@ using Newtonsoft.Json;
 
 using Rebus.Logging;
 using Rebus.Serialization;
+using Rebus.Serialization.Json;
 using Rebus.AdoNet.Schema;
 using Rebus.AdoNet.Dialects;
 
@@ -33,6 +34,7 @@ namespace Rebus.AdoNet
 		private static readonly JsonSerializerSettings Settings = new JsonSerializerSettings {
 			TypeNameHandling = TypeNameHandling.All, // TODO: Make it configurable by adding a SagaTypeResolver feature.
 			DateFormatHandling = DateFormatHandling.IsoDateFormat, // TODO: Make it configurable..
+			Binder = new CustomSerializationBinder()
 		};
 
 		private readonly AdoNetUnitOfWorkManager manager;
@@ -216,6 +218,19 @@ namespace Rebus.AdoNet
 		public AdoNetSagaPersisterFluentConfigurer CustomizeOpenedConnections(Action<IDbConnection> customizer)
 		{
 			manager.ConnectionFactory.ConnectionCustomizer = customizer;
+			return this;
+		}
+
+		/// <summary>
+		/// Customizes type2name & name2type mapping logic used during serialization/deserialization.
+		/// </summary>
+		/// <param name="nameToTypeResolver">Delegate to invoke when resolving a name-to-type during deserialization.</param>
+		/// <param name="typeToNameResolver">Delegate to invoke when resolving a type-to-name during serialization.</param>
+		/// <returns></returns>
+		public AdoNetSagaPersisterFluentConfigurer CustomizeSerializationTypeResolving(Func<TypeDescriptor, Type> nameToTypeResolver, Func<Type, TypeDescriptor> typeToNameResolver)
+		{
+			(Settings.Binder as CustomSerializationBinder).NameToTypeResolver = nameToTypeResolver;
+			(Settings.Binder as CustomSerializationBinder).TypeToNameResolver = typeToNameResolver;
 			return this;
 		}
 

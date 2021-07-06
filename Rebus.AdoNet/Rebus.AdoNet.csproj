@@ -82,6 +82,7 @@
     <Compile Include="Dialects\PostgreSqlExceptionAdapter.cs" />
     <Compile Include="GenericExtensions.cs" />
     <Compile Include="AdoNetSagaLockedException.cs" />
+    <Compile Include="CustomSerializationBinder.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

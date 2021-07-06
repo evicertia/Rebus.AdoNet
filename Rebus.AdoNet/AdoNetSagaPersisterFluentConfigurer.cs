@@ -1,9 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Data;
+
+using Rebus.Serialization.Json;
 
 namespace Rebus.AdoNet
 {
@@ -55,5 +57,13 @@ namespace Rebus.AdoNet
 		/// <param name="customizer">Delegate to invoke for each opened IDbConnection</param>
 		/// <returns></returns>
 		AdoNetSagaPersisterFluentConfigurer CustomizeOpenedConnections(Action<IDbConnection> customizer);
+
+		/// <summary>
+		/// Customizes type2name & name2type mapping logic used during serialization/deserialization.
+		/// </summary>
+		/// <param name="nameToTypeResolver">Delegate to invoke when resolving a name-to-type during deserialization.</param>
+		/// <param name="typeToNameResolver">Delegate to invoke when resolving a type-to-name during serialization.</param>
+		/// <returns></returns>
+		AdoNetSagaPersisterFluentConfigurer CustomizeSerializationTypeResolving(Func<TypeDescriptor, Type> nameToTypeResolver, Func<Type, TypeDescriptor> typeToNameResolver);
 	}
 }
