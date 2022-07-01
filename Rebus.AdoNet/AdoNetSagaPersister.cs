@@ -753,6 +753,7 @@ namespace Rebus.AdoNet
 
 		public TSagaData Find<TSagaData>(string sagaDataPropertyPath, object fieldFromMessage) where TSagaData : class, ISagaData
 		{
+			log.Debug("Finding saga of type {0} with {1} = {2}", typeof(TSagaData).Name, sagaDataPropertyPath, fieldFromMessage);
 			using (var scope = manager.GetScope(autocomplete: true))
 			{
 				var dialect = scope.Dialect;
@@ -808,7 +809,7 @@ namespace Rebus.AdoNet
 						var valuesPredicate = ArraysEnabledFor(dialect)
 							? dialect.FormatArrayAny($"i.{indexValuesCol}", indexValuesParm)
 							: $"(i.{indexValuesCol} LIKE ('%' || {indexValuesParm} || '%'))";
-
+						
 						command.CommandText = $@"
 							SELECT s.{dataCol}
 							FROM {sagaTblName} s
@@ -826,7 +827,7 @@ namespace Rebus.AdoNet
 									END
 								  )
 							{forUpdate};".Replace("\t", "");
-
+						
 						var value = GetIndexValue(fieldFromMessage);
 						var values = value == null ? null : ArraysEnabledFor(dialect)
 							? (object)(new[] { value })
@@ -843,7 +844,9 @@ namespace Rebus.AdoNet
 
 					try
 					{
+						if (dialect is PostgreSqlDialect)  connection.ExecuteCommand("SET LOCAL enable_seqscan = off;");
 						data = (string)command.ExecuteScalar();
+						if (dialect is PostgreSqlDialect)  connection.ExecuteCommand("SET LOCAL enable_seqscan = on;");
 					}
 					catch (DbException ex)
 					{
@@ -857,8 +860,14 @@ namespace Rebus.AdoNet
 
 						throw;
 					}
+					
+					if (data == null)
+					{
+						log.Debug("No saga found of type {0} with {1} = {2}", typeof(TSagaData).Name, sagaDataPropertyPath, fieldFromMessage);
+						return null;
+					}
 
-					if (data == null) return null;
+					log.Debug("Found saga of type {0} with {1} = {2}", typeof(TSagaData).Name, sagaDataPropertyPath, fieldFromMessage);
 
 					try
 					{
