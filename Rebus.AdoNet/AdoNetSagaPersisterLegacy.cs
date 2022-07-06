@@ -20,7 +20,7 @@ namespace Rebus.AdoNet
 	/// <summary>
 	/// Implements a saga persister for Rebus that stores sagas using an AdoNet provider.
 	/// </summary>
-	public class AdoNetSagaPersister : IStoreSagaData, AdoNetSagaPersisterFluentConfigurer, ICanUpdateMultipleSagaDatasAtomically
+	public class AdoNetSagaPersisterLegacy : AdoNetSagaPersister, IStoreSagaData, AdoNetSagaPersisterFluentConfigurer, ICanUpdateMultipleSagaDatasAtomically
 	{
 		private const int MaximumSagaDataTypeNameLength = 80;
 		private const string SAGA_ID_COLUMN = "id";
@@ -32,23 +32,12 @@ namespace Rebus.AdoNet
 		private const string SAGAINDEX_VALUE_COLUMN = "value";
 		private const string SAGAINDEX_VALUES_COLUMN = "values";
 		private static ILog log;
-		private static readonly JsonSerializerSettings Settings = new JsonSerializerSettings {
-			TypeNameHandling = TypeNameHandling.All, // TODO: Make it configurable by adding a SagaTypeResolver feature.
-			DateFormatHandling = DateFormatHandling.IsoDateFormat, // TODO: Make it configurable..
-			Binder = new CustomSerializationBinder()
-		};
 
-		private readonly AdoNetUnitOfWorkManager manager;
-		private readonly string sagaIndexTableName;
-		private readonly string sagaTableName;
+		private readonly string sagasIndexTableName;
+		private readonly string sagasTableName;
 		private readonly string idPropertyName;
-		private bool useSagaLocking;
-		private bool useSqlArrays;
-		private bool useNoWaitSagaLocking;
-		private bool indexNullProperties = true;
-		private Func<Type, string> sagaNameCustomizer;
-
-		static AdoNetSagaPersister()
+		
+		static AdoNetSagaPersisterLegacy()
 		{
 			RebusLoggerFactory.Changed += f => log = f.GetCurrentClassLogger();
 		}
@@ -57,40 +46,24 @@ namespace Rebus.AdoNet
 		/// Constructs the persister with the ability to create connections to database using the specified connection string.
 		/// This also means that the persister will manage the connection by itself, closing it when it has stopped using it.
 		/// </summary>
-		public AdoNetSagaPersister(AdoNetUnitOfWorkManager manager, string sagaTableName, string sagaIndexTableName)
+		public AdoNetSagaPersisterLegacy(AdoNetUnitOfWorkManager manager, string sagasTableName, string sagasIndexTableName)
+			: base(manager)
 		{
-			this.manager = manager;
-			this.sagaTableName = sagaTableName;
-			this.sagaIndexTableName = sagaIndexTableName;
+			this.sagasTableName = sagasTableName;
+			this.sagasIndexTableName = sagasIndexTableName;
 			this.idPropertyName = Reflect.Path<ISagaData>(x => x.Id);
 		}
 
 		#region AdoNetSagaPersisterFluentConfigurer
 
 		/// <summary>
-		/// Configures the persister to ignore null-valued correlation properties and not add them to the saga index.
-		/// </summary>
-		public AdoNetSagaPersisterFluentConfigurer DoNotIndexNullProperties()
-		{
-			indexNullProperties = false;
-			return this;
-		}
-
-		public AdoNetSagaPersisterFluentConfigurer UseLockingOnSagaUpdates(bool waitForLocks)
-		{
-			useSagaLocking = true;
-			useNoWaitSagaLocking = !waitForLocks;
-			return this;
-		}
-
-		/// <summary>
 		/// Creates the necessary saga storage tables if they haven't already been created. If a table already exists
 		/// with a name that matches one of the desired table names, no action is performed (i.e. it is assumed that
 		/// the tables already exist).
 		/// </summary>
-		public AdoNetSagaPersisterFluentConfigurer EnsureTablesAreCreated()
+		public override AdoNetSagaPersisterFluentConfigurer EnsureTablesAreCreated()
 		{
-			using (var uow = manager.Create(autonomous: true))
+			using (var uow = Manager.Create(autonomous: true))
 			using (var scope = (uow as AdoNetUnitOfWork).GetScope())
 			{
 				var dialect = scope.Dialect;
@@ -98,12 +71,12 @@ namespace Rebus.AdoNet
 				var tableNames = scope.GetTableNames();
 
 				// bail out if there's already a table in the database with one of the names
-				var sagaTableIsAlreadyCreated = tableNames.Contains(sagaTableName, StringComparer.InvariantCultureIgnoreCase);
-				var sagaIndexTableIsAlreadyCreated = tableNames.Contains(sagaIndexTableName, StringComparer.OrdinalIgnoreCase);
+				var sagaTableIsAlreadyCreated = tableNames.Contains(sagasTableName, StringComparer.InvariantCultureIgnoreCase);
+				var sagaIndexTableIsAlreadyCreated = tableNames.Contains(sagasIndexTableName, StringComparer.OrdinalIgnoreCase);
 
 				if (sagaTableIsAlreadyCreated && sagaIndexTableIsAlreadyCreated)
 				{
-					log.Debug("Tables '{0}' and '{1}' already exists.", sagaTableName, sagaIndexTableName);
+					log.Debug("Tables '{0}' and '{1}' already exists.", sagasTableName, sagasIndexTableName);
 					return this;
 				}
 
@@ -111,22 +84,22 @@ namespace Rebus.AdoNet
 				{
 					// if saga index is created, then saga table is not created and vice versa
 					throw new ApplicationException(string.Format("Table '{0}' do not exist - you have to create it manually",
-						sagaIndexTableIsAlreadyCreated ? sagaTableName : sagaIndexTableName));
+						sagaIndexTableIsAlreadyCreated ? sagasTableName : sagasIndexTableName));
 				}
 
-				if (useSqlArrays && !dialect.SupportsArrayTypes)
+				if (UseSqlArrays && !dialect.SupportsArrayTypes)
 				{
 					throw new ApplicationException("Enabled UseSqlArraysForCorrelationIndexes but underlaying database does not support arrays?!");
 				}
 
-				log.Info("Tables '{0}' and '{1}' do not exist - they will be created now", sagaTableName, sagaIndexTableName);
+				log.Info("Tables '{0}' and '{1}' do not exist - they will be created now", sagasTableName, sagasIndexTableName);
 				
 				using (var command = connection.CreateCommand())
 				{
 					command.CommandText = scope.Dialect.FormatCreateTable(
 						new AdoNetTable()
 						{
-							Name = sagaTableName,
+							Name = sagasTableName,
 							Columns = new []
 							{
 								new AdoNetColumn() { Name = SAGA_ID_COLUMN, DbType = DbType.Guid },
@@ -137,7 +110,7 @@ namespace Rebus.AdoNet
 							PrimaryKey = new[] { SAGA_ID_COLUMN },
 							Indexes = new []
 							{
-								new AdoNetIndex() { Name = $"ix_{sagaTableName}_{SAGA_ID_COLUMN}_{SAGA_TYPE_COLUMN}", Columns = new [] { SAGA_ID_COLUMN, SAGA_TYPE_COLUMN } },
+								new AdoNetIndex() { Name = $"ix_{sagasTableName}_{SAGA_ID_COLUMN}_{SAGA_TYPE_COLUMN}", Columns = new [] { SAGA_ID_COLUMN, SAGA_TYPE_COLUMN } },
 							}
 						}
 					);
@@ -150,28 +123,26 @@ namespace Rebus.AdoNet
 					command.CommandText = scope.Dialect.FormatCreateTable(
 						new AdoNetTable()
 						{
-							Name = sagaIndexTableName,
+							Name = sagasIndexTableName,
 							Columns = new []
 							{
 								new AdoNetColumn() { Name = SAGAINDEX_ID_COLUMN, DbType = DbType.Guid },
 								new AdoNetColumn() { Name = SAGAINDEX_KEY_COLUMN, DbType = DbType.String, Length = 200  },
 								new AdoNetColumn() { Name = SAGAINDEX_VALUE_COLUMN, DbType = DbType.String, Length = 1073741823, Nullable = true },
-								new AdoNetColumn() { Name = SAGAINDEX_VALUES_COLUMN, DbType = DbType.String, Length = 1073741823, Nullable = true, Array = useSqlArrays }
+								new AdoNetColumn() { Name = SAGAINDEX_VALUES_COLUMN, DbType = DbType.String, Length = 1073741823, Nullable = true, Array = UseSqlArrays }
 							},
 							PrimaryKey = new[] { SAGAINDEX_ID_COLUMN, SAGAINDEX_KEY_COLUMN },
 							Indexes = new []
 							{
 								new AdoNetIndex()
 								{
-									Name = $"ix_{sagaIndexTableName}_{SAGAINDEX_KEY_COLUMN}_{SAGAINDEX_VALUE_COLUMN}",
+									Name = $"ix_{sagasIndexTableName}_{SAGAINDEX_KEY_COLUMN}_{SAGAINDEX_VALUE_COLUMN}",
 									Columns = new[] { SAGAINDEX_KEY_COLUMN, SAGAINDEX_VALUE_COLUMN },
-									//Kind = "ybgin"
 								},
 								new AdoNetIndex()
 								{
-									Name = $"ix_{sagaIndexTableName}_{SAGAINDEX_KEY_COLUMN}_{SAGAINDEX_VALUES_COLUMN}",
+									Name = $"ix_{sagasIndexTableName}_{SAGAINDEX_KEY_COLUMN}_{SAGAINDEX_VALUES_COLUMN}",
 									Columns = new[] { SAGAINDEX_KEY_COLUMN, SAGAINDEX_VALUES_COLUMN },
-									//Kind = "ybgin"
 								}
 							}
 						}
@@ -181,80 +152,17 @@ namespace Rebus.AdoNet
 				}
 
 				scope.Complete();
-				log.Info("Tables '{0}' and '{1}' created", sagaTableName, sagaIndexTableName);
+				log.Info("Tables '{0}' and '{1}' created", sagasTableName, sagasIndexTableName);
 			}
 
-			/*using (var scope = manager.GetScope(autonomous: true))
-			{
-				var tableNames = scope.GetTableNames();
-				if (!tableNames.Contains(sagaTableName, StringComparer.InvariantCultureIgnoreCase))
-					throw new InvalidOperationException("Tables not present?!");
-				
-			}*/
-
 			return this;
 		}
-
-		/// <summary>
-		/// Customizes the saga names by invoking this customizer.
-		/// </summary>
-		/// <param name="customizer">The customizer.</param>
-		/// <returns></returns>
-		public AdoNetSagaPersisterFluentConfigurer CustomizeSagaNamesAs(Func<Type, string> customizer)
-		{
-			this.sagaNameCustomizer = customizer;
-			return this;
-		}
-
-		/// <summary>
-		/// Enables locking of sagas as to avoid two or more workers to update them concurrently.
-		/// </summary>
-		/// <returns>The saga locking.</returns>
-		public AdoNetSagaPersisterFluentConfigurer EnableSagaLocking()
-		{
-			useSagaLocking = true;
-			return this;
-		}
-
-		/// <summary>
-		/// Uses the use of sql array types for storing indexes related to correlation properties.
-		/// </summary>
-		/// <returns>The sql arrays.</returns>
-		public AdoNetSagaPersisterFluentConfigurer UseSqlArraysForCorrelationIndexes()
-		{
-			useSqlArrays = true;
-			return this;
-		}
-
-		/// <summary>
-		/// Allows customizing opened connections by passing a delegate/lambda to invoke for each new connection.
-		/// </summary>
-		/// <param name="customizer"></param>
-		/// <returns></returns>
-		public AdoNetSagaPersisterFluentConfigurer CustomizeOpenedConnections(Action<IDbConnection> customizer)
-		{
-			manager.ConnectionFactory.ConnectionCustomizer = customizer;
-			return this;
-		}
-
-		/// <summary>
-		/// Customizes type2name & name2type mapping logic used during serialization/deserialization.
-		/// </summary>
-		/// <param name="nameToTypeResolver">Delegate to invoke when resolving a name-to-type during deserialization.</param>
-		/// <param name="typeToNameResolver">Delegate to invoke when resolving a type-to-name during serialization.</param>
-		/// <returns></returns>
-		public AdoNetSagaPersisterFluentConfigurer CustomizeSerializationTypeResolving(Func<TypeDescriptor, Type> nameToTypeResolver, Func<Type, TypeDescriptor> typeToNameResolver)
-		{
-			(Settings.Binder as CustomSerializationBinder).NameToTypeResolver = nameToTypeResolver;
-			(Settings.Binder as CustomSerializationBinder).TypeToNameResolver = typeToNameResolver;
-			return this;
-		}
-
+		
 		#endregion
 
-		public void Insert(ISagaData sagaData, string[] sagaDataPropertyPathsToIndex)
+		public override void Insert(ISagaData sagaData, string[] sagaDataPropertyPathsToIndex)
 		{
-			using (var scope = manager.GetScope())
+			using (var scope = Manager.GetScope())
 			{
 				var dialect = scope.Dialect;
 				var connection = scope.Connection;
@@ -267,11 +175,11 @@ namespace Rebus.AdoNet
 					command.AddParameter(dialect.EscapeParameter(SAGA_ID_COLUMN), sagaData.Id);
 					command.AddParameter(dialect.EscapeParameter(SAGA_TYPE_COLUMN), sagaTypeName);
 					command.AddParameter(dialect.EscapeParameter(SAGA_REVISION_COLUMN), ++sagaData.Revision);
-					command.AddParameter(dialect.EscapeParameter(SAGA_DATA_COLUMN), JsonConvert.SerializeObject(sagaData, Formatting.Indented, Settings));
+					command.AddParameter(dialect.EscapeParameter(SAGA_DATA_COLUMN), Serialize(sagaData));
 
 					command.CommandText = string.Format(
 						@"insert into {0} ({1}, {2}, {3}, {4}) values ({5}, {6}, {7}, {8});",
-						dialect.QuoteForTableName(sagaTableName),
+						dialect.QuoteForTableName(sagasTableName),
 						dialect.QuoteForColumnName(SAGA_ID_COLUMN),
 						dialect.QuoteForColumnName(SAGA_TYPE_COLUMN),
 						dialect.QuoteForColumnName(SAGA_REVISION_COLUMN),
@@ -303,9 +211,9 @@ namespace Rebus.AdoNet
 			}
 		}
 
-		public void Update(ISagaData sagaData, string[] sagaDataPropertyPathsToIndex)
+		public override void Update(ISagaData sagaData, string[] sagaDataPropertyPathsToIndex)
 		{
-			using (var scope = manager.GetScope())
+			using (var scope = Manager.GetScope())
 			{
 				var dialect = scope.Dialect;
 				var connection = scope.Connection;
@@ -317,12 +225,12 @@ namespace Rebus.AdoNet
 					command.AddParameter(dialect.EscapeParameter(SAGA_ID_COLUMN), sagaData.Id);
 					command.AddParameter(dialect.EscapeParameter("current_revision"), sagaData.Revision);
 					command.AddParameter(dialect.EscapeParameter("next_revision"), ++sagaData.Revision);
-					command.AddParameter(dialect.EscapeParameter(SAGA_DATA_COLUMN), JsonConvert.SerializeObject(sagaData, Formatting.Indented, Settings));
+					command.AddParameter(dialect.EscapeParameter(SAGA_DATA_COLUMN), Serialize(sagaData));
 
 					command.CommandText = string.Format(
 						@"UPDATE {0} SET {1} = {2}, {3} = {4} " +
 						@"WHERE {5} = {6} AND {7} = {8};",
-						dialect.QuoteForTableName(sagaTableName),
+						dialect.QuoteForTableName(sagasTableName),
 						dialect.QuoteForColumnName(SAGA_DATA_COLUMN), dialect.EscapeParameter(SAGA_DATA_COLUMN),
 						dialect.QuoteForColumnName(SAGA_REVISION_COLUMN), dialect.EscapeParameter("next_revision"),
 						dialect.QuoteForColumnName(SAGA_ID_COLUMN), dialect.EscapeParameter(SAGA_ID_COLUMN),
@@ -380,7 +288,7 @@ namespace Rebus.AdoNet
 						"RETURNING {2}) " +
 					"DELETE FROM {0} " +
 					"WHERE {1} = {5} AND {2} NOT IN (SELECT {2} FROM existing);",
-					dialect.QuoteForTableName(sagaIndexTableName),      //< 0
+					dialect.QuoteForTableName(sagasIndexTableName),      //< 0
 					dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),    //< 1
 					dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),	//< 2
 					dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN), //< 3
@@ -449,7 +357,7 @@ namespace Rebus.AdoNet
 					"INSERT INTO {0} ({1}, {2}, {3}, {4}) VALUES {5} " +
 						"ON CONFLICT ({1}, {2}) DO UPDATE SET {3} = excluded.{3}, {4} = excluded.{4} " +
 						"RETURNING {2};",
-					dialect.QuoteForTableName(sagaIndexTableName),		//< 0
+					dialect.QuoteForTableName(sagasIndexTableName),		//< 0
 					dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),	//< 1
 					dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),	//< 2
 					dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN), //< 3
@@ -491,7 +399,7 @@ namespace Rebus.AdoNet
 				command.CommandText = string.Format(
 					"DELETE FROM {0} " +
 					"WHERE {1} = {2} AND {3} NOT IN ({4});",
-					dialect.QuoteForTableName(sagaIndexTableName),		//< 0
+					dialect.QuoteForTableName(sagasIndexTableName),		//< 0
 					dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),	//< 1
 					dialect.EscapeParameter(SAGAINDEX_ID_COLUMN),		//< 2
 					dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),	//< 3
@@ -522,7 +430,7 @@ namespace Rebus.AdoNet
 			var dialect = scope.Dialect;
 			var sagaTypeName = GetSagaTypeName(sagaData.GetType());
 
-			var idxTbl = dialect.QuoteForTableName(sagaIndexTableName);
+			var idxTbl = dialect.QuoteForTableName(sagasIndexTableName);
 			var idCol = dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN);
 			var keyCol = dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN);
 			var valueCol = dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN);
@@ -537,7 +445,7 @@ namespace Rebus.AdoNet
 			{
 				command.CommandText = string.Format(
 					"SELECT {1} FROM {0} WHERE {2} = {3};",
-					dialect.QuoteForTableName(sagaIndexTableName),      //< 0
+					dialect.QuoteForTableName(sagasIndexTableName),      //< 0
 					dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),   //< 1
 					dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),    //< 2
 					dialect.EscapeParameter(SAGAINDEX_ID_COLUMN)		//< 3
@@ -567,7 +475,7 @@ namespace Rebus.AdoNet
 					command.CommandText = string.Format(
 						"UPDATE {0} SET {1} = {2}, {3} = {4} " + 
 						"WHERE {5} = {6} AND {7} = {8};",
-						dialect.QuoteForTableName(sagaIndexTableName),		//< 0
+						dialect.QuoteForTableName(sagasIndexTableName),		//< 0
 						dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),	//< 1
 						dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN),    //< 2
 						dialect.QuoteForColumnName(SAGAINDEX_VALUES_COLUMN),//< 3
@@ -609,7 +517,7 @@ namespace Rebus.AdoNet
 				{
 					command.CommandText = string.Format(
 						"DELETE FROM {0} WHERE {1} = {2} AND {3} IN ({4});",
-						dialect.QuoteForTableName(sagaIndexTableName),      //< 0
+						dialect.QuoteForTableName(sagasIndexTableName),      //< 0
 						dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),    //< 1
 						dialect.EscapeParameter(SAGAINDEX_ID_COLUMN),       //< 2
 						dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),   //< 3
@@ -661,7 +569,7 @@ namespace Rebus.AdoNet
 
 					command.CommandText = string.Format(
 						"INSERT INTO {0} ({1}, {2}, {3}, {4}) VALUES {5};",
-						dialect.QuoteForTableName(sagaIndexTableName),      //< 0
+						dialect.QuoteForTableName(sagasIndexTableName),      //< 0
 						dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN),	//< 1
 						dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN),	//< 2
 						dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN), //< 3
@@ -715,9 +623,9 @@ namespace Rebus.AdoNet
 			}
 		}
 
-		public void Delete(ISagaData sagaData)
+		public override void Delete(ISagaData sagaData)
 		{
-			using (var scope = manager.GetScope())
+			using (var scope = Manager.GetScope())
 			{
 				var dialect = scope.Dialect;
 				var connection = scope.Connection;
@@ -726,7 +634,7 @@ namespace Rebus.AdoNet
 				{
 					command.CommandText = string.Format(
 						@"DELETE FROM {0} WHERE {1} = {2} AND {3} = {4};",
-						dialect.QuoteForTableName(sagaTableName),
+						dialect.QuoteForTableName(sagasTableName),
 						dialect.QuoteForColumnName(SAGA_ID_COLUMN), dialect.EscapeParameter(SAGA_ID_COLUMN),
 						dialect.QuoteForColumnName(SAGA_REVISION_COLUMN), dialect.EscapeParameter("current_revision")
 					);
@@ -745,7 +653,7 @@ namespace Rebus.AdoNet
 				{
 					command.CommandText = string.Format(
 						@"DELETE FROM {0} WHERE {1} = {2};",
-						dialect.QuoteForTableName(sagaIndexTableName),
+						dialect.QuoteForTableName(sagasIndexTableName),
 						dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN), dialect.EscapeParameter(SAGA_ID_COLUMN)
 					);
 					command.AddParameter(dialect.EscapeParameter(SAGA_ID_COLUMN), sagaData.Id);
@@ -758,162 +666,24 @@ namespace Rebus.AdoNet
 
 		private string GetSagaLockingClause(SqlDialect dialect)
 		{
-			if (useSagaLocking)
+			if (UseSagaLocking)
 			{
-				return useNoWaitSagaLocking
+				return UseNoWaitSagaLocking
 					? $"{dialect.SelectForUpdateClause} {dialect.SelectForNoWaitClause}"
 					: dialect.SelectForUpdateClause;
 			}
 
 			return string.Empty;
 		}
-
-		public TSagaData Find<TSagaData>(string sagaDataPropertyPath, object fieldFromMessage) where TSagaData : class, ISagaData
-		{
-			using (var scope = manager.GetScope(autocomplete: true))
-			{
-				var dialect = scope.Dialect;
-				var connection = scope.Connection;
-				var sagaType = GetSagaTypeName(typeof(TSagaData));
-
-				if (useSagaLocking)
-				{
-					if (!dialect.SupportsSelectForUpdate)
-						throw new InvalidOperationException($"You can't use saga locking for a Dialect {dialect.GetType()} that does not supports Select For Update.");
-
-					if (useNoWaitSagaLocking && !dialect.SupportsSelectForWithNoWait)
-						throw new InvalidOperationException($"You can't use saga locking with no-wait for a Dialect {dialect.GetType()} that does not supports no-wait clause.");
-				}
-					
-				using (var command = connection.CreateCommand())
-				{
-					if (sagaDataPropertyPath == idPropertyName)
-					{
-						var id = (fieldFromMessage is Guid) ? (Guid)fieldFromMessage : Guid.Parse(fieldFromMessage.ToString());
-						var idParam = dialect.EscapeParameter("id");
-						var sagaTypeParam = dialect.EscapeParameter(SAGA_TYPE_COLUMN);
-
-						command.CommandText = string.Format(
-							@"SELECT s.{0} FROM {1} s WHERE s.{2} = {3} AND s.{4} = {5} {6}",
-							dialect.QuoteForColumnName(SAGA_DATA_COLUMN),
-							dialect.QuoteForTableName(sagaTableName),
-							dialect.QuoteForColumnName(SAGA_ID_COLUMN),
-							idParam,
-							dialect.QuoteForColumnName(SAGA_TYPE_COLUMN),
-							sagaTypeParam,
-							GetSagaLockingClause(dialect)
-						);
-						command.AddParameter(sagaTypeParam, sagaType);
-						command.AddParameter(idParam, id);
-					}
-					else
-					{
-						var dataCol = dialect.QuoteForColumnName(SAGA_DATA_COLUMN);
-						var sagaTblName = dialect.QuoteForTableName(sagaTableName);
-						var sagaTypeCol = dialect.QuoteForColumnName(SAGA_TYPE_COLUMN);
-						var sagaTypeParam = dialect.EscapeParameter(SAGA_TYPE_COLUMN);
-						var indexTblName = dialect.QuoteForTableName(sagaIndexTableName);
-						var sagaIdCol = dialect.QuoteForColumnName(SAGA_ID_COLUMN);
-						var indexIdCol = dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN);
-						var indexKeyCol = dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN);
-						var indexKeyParam = dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN);
-						var indexValueCol = dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN);
-						var indexValueParm = dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN);
-						var indexValuesCol = dialect.QuoteForColumnName(SAGAINDEX_VALUES_COLUMN);
-						var indexValuesParm = dialect.EscapeParameter(SAGAINDEX_VALUES_COLUMN);
-						var forUpdate = GetSagaLockingClause(dialect);
-						var valuesPredicate = ArraysEnabledFor(dialect)
-							? dialect.FormatArrayAny($"i.{indexValuesCol}", indexValuesParm)
-							: $"(i.{indexValuesCol} LIKE ('%' || {indexValuesParm} || '%'))";
-						
-						command.CommandText = $@"
-							SELECT s.{dataCol}
-							FROM {sagaTblName} s
-							JOIN {indexTblName} i on s.{sagaIdCol} = i.{indexIdCol}
-							WHERE s.{sagaTypeCol} = {sagaTypeParam}
-								AND i.{indexKeyCol} = {indexKeyParam}
-								AND (
-									CASE WHEN {indexValueParm} IS NULL THEN i.{indexValueCol} IS NULL
-									ELSE 
-										(
-											i.{indexValueCol} = {indexValueParm}
-												OR
-											(i.{indexValuesCol} is NOT NULL AND {valuesPredicate})
-										)
-									END
-								  )
-							{forUpdate};".Replace("\t", "");
-						
-						var value = GetIndexValue(fieldFromMessage);
-						var values = value == null ? null : ArraysEnabledFor(dialect)
-							? (object)(new[] { value })
-							: GetConcatenatedIndexValues(new[] { value });
-						var valuesDbType = ArraysEnabledFor(dialect) ? DbType.Object : DbType.String;
-
-						command.AddParameter(indexKeyParam, sagaDataPropertyPath);
-						command.AddParameter(sagaTypeParam, sagaType);
-						command.AddParameter(indexValueParm, DbType.String, value);
-						command.AddParameter(indexValuesParm, valuesDbType, values);
-					}
-
-					string data = null;
-
-					try
-					{
-						log.Debug("Finding saga of type {0} with {1} = {2}", sagaType, sagaDataPropertyPath, fieldFromMessage);
-						//if (dialect is PostgreSqlDialect)  connection.ExecuteCommand("SET LOCAL enable_seqscan = off;");
-						data = (string)command.ExecuteScalar();
-						//if (dialect is PostgreSqlDialect)  connection.ExecuteCommand("SET LOCAL enable_seqscan = on;");
-					}
-					catch (DbException ex)
-					{
-						// When in no-wait saga-locking mode, inspect
-						// exception and rethrow ex as SagaLockedException.
-						if (useSagaLocking && useNoWaitSagaLocking)
-						{
-							if (dialect.IsSelectForNoWaitLockingException(ex))
-								throw new AdoNetSagaLockedException(ex);
-						}
-
-						throw;
-					}
-					
-					if (data == null)
-					{
-						log.Debug("No saga found of type {0} with {1} = {2}", sagaType, sagaDataPropertyPath, fieldFromMessage);
-						return null;
-					}
-
-					log.Debug("Found saga of type {0} with {1} = {2}", sagaType, sagaDataPropertyPath, fieldFromMessage);
-
-					try
-					{
-						return JsonConvert.DeserializeObject<TSagaData>(data, Settings);
-					}
-					catch { }
-
-					try
-					{
-						return (TSagaData)JsonConvert.DeserializeObject(data, Settings);
-					}
-					catch (Exception exception)
-					{
-						var message = string.Format("An error occurred while attempting to deserialize '{0}' into a {1}", data, typeof(TSagaData));
-
-						throw new ApplicationException(message, exception);
-					}
-				}
-			}
-		}
-
+		
 		private bool ArraysEnabledFor(SqlDialect dialect)
 		{
-			return useSqlArrays && dialect.SupportsArrayTypes;
+			return UseSqlArrays && dialect.SupportsArrayTypes;
 		}
 
 		private bool ShouldIndexValue(object value)
 		{
-			if (indexNullProperties)
+			if (IndexNullProperties)
 				return true;
 
 			if (value == null) return false;
@@ -974,67 +744,114 @@ namespace Rebus.AdoNet
 			return sb.ToString();
 		}
 
-		#region Default saga name
-
-		private static string GetClassName(Type type)
+		protected override string Fetch<TSagaData>(string sagaDataPropertyPath, object fieldFromMessage) 
 		{
-			var classNameRegex = new Regex("^[a-zA-Z0-9_]*[\\w]", RegexOptions.IgnoreCase);
-			var match = classNameRegex.Match(type.Name);
-
-			if (!match.Success) throw new Exception($"Error trying extract name class from type: {type.Name}");
-
-			return match.Value;
-		}
-
-		private static IEnumerable<string> GetGenericArguments(Type type)
-		{
-			return type.GetGenericArguments()
-				.Select(x => x.Name)
-				.ToList();
-		}
-
-		private static string GetDefaultSagaName(Type type)
-		{
-			var declaringType = type.DeclaringType;
-
-			if (type.IsNested && declaringType != null)
+			using (var scope = Manager.GetScope(autocomplete: true))
 			{
-				if (declaringType.IsGenericType)
+				var dialect = scope.Dialect;
+				var connection = scope.Connection;
+				var sagaType = GetSagaTypeName(typeof(TSagaData));
+
+				if (UseSagaLocking)
 				{
-					var className = GetClassName(declaringType);
-					var genericArguments = GetGenericArguments(type).ToList();
+					if (!dialect.SupportsSelectForUpdate)
+						throw new InvalidOperationException($"You can't use saga locking for a Dialect {dialect.GetType()} that does not supports Select For Update.");
 
-					return genericArguments.Any()
-						? $"{className}<{string.Join(",", genericArguments)}>"
-						: $"{className}";
+					if (UseNoWaitSagaLocking && !dialect.SupportsSelectForWithNoWait)
+						throw new InvalidOperationException($"You can't use saga locking with no-wait for a Dialect {dialect.GetType()} that does not supports no-wait clause.");
 				}
+					
+				using (var command = connection.CreateCommand())
+				{
+					if (sagaDataPropertyPath == idPropertyName)
+					{
+						var id = (fieldFromMessage is Guid) ? (Guid)fieldFromMessage : Guid.Parse(fieldFromMessage.ToString());
+						var idParam = dialect.EscapeParameter("id");
+						var sagaTypeParam = dialect.EscapeParameter(SAGA_TYPE_COLUMN);
 
-				return declaringType.Name;
+						command.CommandText = string.Format(
+							@"SELECT s.{0} FROM {1} s WHERE s.{2} = {3} AND s.{4} = {5} {6}",
+							dialect.QuoteForColumnName(SAGA_DATA_COLUMN),
+							dialect.QuoteForTableName(sagasTableName),
+							dialect.QuoteForColumnName(SAGA_ID_COLUMN),
+							idParam,
+							dialect.QuoteForColumnName(SAGA_TYPE_COLUMN),
+							sagaTypeParam,
+							GetSagaLockingClause(dialect)
+						);
+						command.AddParameter(sagaTypeParam, sagaType);
+						command.AddParameter(idParam, id);
+					}
+					else
+					{
+						var dataCol = dialect.QuoteForColumnName(SAGA_DATA_COLUMN);
+						var sagaTblName = dialect.QuoteForTableName(sagasTableName);
+						var sagaTypeCol = dialect.QuoteForColumnName(SAGA_TYPE_COLUMN);
+						var sagaTypeParam = dialect.EscapeParameter(SAGA_TYPE_COLUMN);
+						var indexTblName = dialect.QuoteForTableName(sagasIndexTableName);
+						var sagaIdCol = dialect.QuoteForColumnName(SAGA_ID_COLUMN);
+						var indexIdCol = dialect.QuoteForColumnName(SAGAINDEX_ID_COLUMN);
+						var indexKeyCol = dialect.QuoteForColumnName(SAGAINDEX_KEY_COLUMN);
+						var indexKeyParam = dialect.EscapeParameter(SAGAINDEX_KEY_COLUMN);
+						var indexValueCol = dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN);
+						var indexValueParm = dialect.EscapeParameter(SAGAINDEX_VALUE_COLUMN);
+						var indexValuesCol = dialect.QuoteForColumnName(SAGAINDEX_VALUES_COLUMN);
+						var indexValuesParm = dialect.EscapeParameter(SAGAINDEX_VALUES_COLUMN);
+						var forUpdate = GetSagaLockingClause(dialect);
+						var valuesPredicate = ArraysEnabledFor(dialect)
+							? dialect.FormatArrayAny($"i.{indexValuesCol}", indexValuesParm)
+							: $"(i.{indexValuesCol} LIKE ('%' || {indexValuesParm} || '%'))";
+						
+						command.CommandText = $@"
+							SELECT s.{dataCol}
+							FROM {sagaTblName} s
+							JOIN {indexTblName} i on s.{sagaIdCol} = i.{indexIdCol}
+							WHERE s.{sagaTypeCol} = {sagaTypeParam}
+								AND i.{indexKeyCol} = {indexKeyParam}
+								AND (
+									CASE WHEN {indexValueParm} IS NULL THEN i.{indexValueCol} IS NULL
+									ELSE 
+										(
+											i.{indexValueCol} = {indexValueParm}
+												OR
+											(i.{indexValuesCol} is NOT NULL AND {valuesPredicate})
+										)
+									END
+								  )
+							{forUpdate};".Replace("\t", "");
+						
+						var value = GetIndexValue(fieldFromMessage);
+						var values = value == null ? DBNull.Value : ArraysEnabledFor(dialect)
+							? (object)(new[] { value })
+							: GetConcatenatedIndexValues(new[] { value });
+						var valuesDbType = ArraysEnabledFor(dialect) ? DbType.Object : DbType.String;
+
+						command.AddParameter(indexKeyParam, sagaDataPropertyPath);
+						command.AddParameter(sagaTypeParam, sagaType);
+						command.AddParameter(indexValueParm, DbType.String, value);
+						command.AddParameter(indexValuesParm, valuesDbType, values);
+					}
+
+
+					try
+					{
+						log.Debug("Finding saga of type {0} with {1} = {2}", sagaType, sagaDataPropertyPath, fieldFromMessage);
+						return (string)command.ExecuteScalar();
+					}
+					catch (DbException ex)
+					{
+						// When in no-wait saga-locking mode, inspect
+						// exception and rethrow ex as SagaLockedException.
+						if (UseSagaLocking && UseNoWaitSagaLocking)
+						{
+							if (dialect.IsSelectForNoWaitLockingException(ex))
+								throw new AdoNetSagaLockedException(ex);
+						}
+
+						throw;
+					}
+				}
 			}
-
-			return type.Name;
-		}
-
-		#endregion
-
-		private string GetSagaTypeName(Type sagaDataType)
-		{
-			var sagaTypeName = sagaNameCustomizer != null ? sagaNameCustomizer(sagaDataType) : GetDefaultSagaName(sagaDataType);
-
-			if (sagaTypeName.Length > MaximumSagaDataTypeNameLength)
-			{
-				throw new InvalidOperationException(
-					string.Format(
-						@"Sorry, but the maximum length of the name of a saga data class is currently limited to {0} characters!
-
-This is due to a limitation in SQL Server, where compound indexes have a 900 byte upper size limit - and
-since the saga index needs to be able to efficiently query by saga type, key, and value at the same time,
-there's room for only 200 characters as the key, 200 characters as the value, and 80 characters as the
-saga type name.",
-						MaximumSagaDataTypeNameLength));
-			}
-
-			return sagaTypeName;
 		}
 	}
 }

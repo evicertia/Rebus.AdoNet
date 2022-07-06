@@ -347,6 +347,17 @@ namespace Rebus.AdoNet.Dialects
 			return IsQuoted(tableName) ? tableName : Quote(tableName);
 		}
 
+		/// <summary>
+		/// Casts an SQL expression to db's DbType equivalent. 
+		/// </summary>
+		/// <param name="expression"></param>
+		/// <param name="type"></param>
+		/// <returns></returns>
+		public virtual string Cast(string expression, DbType type)
+		{
+			var dbtype = GetColumnType(type);
+			return $"CAST(({expression}) AS {dbtype})";
+		}
 		#endregion
 
 		#region Parameter handling
@@ -412,12 +423,16 @@ namespace Rebus.AdoNet.Dialects
 			foreach (var column in table.Columns.ToArray())
 			{
 				var primaryKey = (!table.HasCompositePrimaryKey && (bool)table.PrimaryKey?.Any(x => x == column.Name));
+				var @default = column.Default == null ? "" : column.Default is string
+						? Quote(column.Default as string)
+						: column.Default.ToString();
 
-				sb.AppendFormat(" {0} {1} {2} {3}",
+				sb.AppendFormat(" {0} {1} {2} {3} {4}",
 					QuoteForColumnName(column.Name),
 					GetColumnType(column.DbType, column.Length, column.Precision, column.Scale, column.Identity, column.Array, primaryKey),
 					column.Nullable ? "" : "NOT NULL",
-					(table.Columns.Last() == column) ? "" : ","
+					(table.Columns.Last() == column) ? "" : ",",
+					column.Default == null ? "" : $"DEFAULT {default}"
 				);
 			}
 
@@ -435,7 +450,7 @@ namespace Rebus.AdoNet.Dialects
 			{
 				foreach (var index in table.Indexes)
 				{
-					sb.Append(FormatCreateIndex(table.Name, index));
+					sb.Append(FormatCreateIndex(table, index));
 				}
 			}
 
@@ -448,12 +463,30 @@ namespace Rebus.AdoNet.Dialects
 		/// <param name="table">The table.</param>
 		/// <param name="index">The index.</param>
 		/// <returns></returns>
-		public virtual string FormatCreateIndex(string table, AdoNetIndex index)
+		public virtual string FormatCreateIndex(AdoNetTable table, AdoNetIndex index)
 		{
-			return string.Format("CREATE INDEX {0} ON {1} ({2});",
+			var columns = index.Columns;
+
+			// For Json columns, try to apply index optimizations.
+			if (!string.IsNullOrWhiteSpace(JsonColumnGinPathIndexOpclass)
+				&& table.Columns.Any(x => x.DbType == DbType.Object))
+			{
+				columns = columns.Select(x =>
+					table.Columns.Single(c => c.Name == x).DbType == DbType.Object
+						? $"{QuoteForColumnName(x)} {JsonColumnGinPathIndexOpclass}"
+						: QuoteForColumnName(x)
+				).ToArray();
+			}
+			else
+			{
+				columns = columns.Select(x => QuoteForColumnName(x)).ToArray();
+			}
+			
+			return string.Format("CREATE INDEX {0} ON {1} {2} ({3});",
 				!string.IsNullOrEmpty(index.Name) ? QuoteForTableName(index.Name) : "",
-				QuoteForTableName(table),
-				index.Columns.Select(x => QuoteForColumnName(x)).Aggregate((cur, next) => cur + ", " + next)
+				QuoteForTableName(table.Name),
+				index.Kind != AdoNetIndex.Kinds.Default ? $"USING {index.Kind.ToString().ToUpper()}" : "",
+				columns.Aggregate((cur, next) => cur + ", " + next)
 			);
 		}
 
@@ -473,8 +506,13 @@ namespace Rebus.AdoNet.Dialects
 		{
 			throw new NotImplementedException("IsSelectForNoWaitLockingException not implemented for this dialect!");
 		}
-		#endregion
 
+		public virtual bool IsDuplicateKeyException(DbException ex)
+		{
+			throw new NotImplementedException("IsDuplicateKeyException not implemented for this dialect!");
+		}
+		#endregion
+		
 		#region AdvisoryLockFunctions
 		public virtual bool SupportsTryAdvisoryLockFunction => false;
 		public virtual bool SupportsTryAdvisoryXactLockFunction => false;
@@ -509,6 +547,22 @@ namespace Rebus.AdoNet.Dialects
 		{
 			throw new NotSupportedException("ArrayAny function not supported by this dialect.");
 		}
+		#endregion
+		
+		#region GIN Indexing
+		public virtual bool SupportsGinIndexes => false;
+
+		public virtual bool SupportsMultiColumnGinIndexes => false;
+
+		public virtual string TextColumnGinPathIndexOpclass => "";
+
+		#endregion
+
+		#region JSON Support
+
+		public virtual bool SupportsJsonColumns => false;
+
+		public virtual string JsonColumnGinPathIndexOpclass => "";
 		#endregion
 
 		#region SqlDialects Registry

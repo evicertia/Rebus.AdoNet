@@ -12,17 +12,15 @@ using Rebus.AdoNet.Dialects;
 
 namespace Rebus.AdoNet
 {
-	public delegate IAdoNetUnitOfWork UOWCreatorDelegate(AdoNetConnectionFactory factory, IMessageContext context);
-
 	public class AdoNetUnitOfWorkManager : IUnitOfWorkManager
 	{
 		private const string CONTEXT_ITEM_KEY = nameof(IAdoNetUnitOfWork);
 		private readonly AdoNetConnectionFactory _factory;
-		private readonly UOWCreatorDelegate _unitOfWorkCreator;
+		private readonly Func<AdoNetConnectionFactory, IMessageContext, IAdoNetUnitOfWork> _unitOfWorkCreator;
 
 		internal AdoNetConnectionFactory ConnectionFactory => _factory;
 
-		public AdoNetUnitOfWorkManager(AdoNetConnectionFactory factory, UOWCreatorDelegate unitOfWorkCreator)
+		public AdoNetUnitOfWorkManager(AdoNetConnectionFactory factory, Func<AdoNetConnectionFactory, IMessageContext, IAdoNetUnitOfWork> unitOfWorkCreator)
 		{
 			Guard.NotNull(() => factory, factory);
 			Guard.NotNull(() => unitOfWorkCreator, unitOfWorkCreator);
@@ -63,8 +61,12 @@ namespace Rebus.AdoNet
 			return result;
 		}
 
-		public IUnitOfWork Create()
+		public IUnitOfWork Create(bool autonomous)
 		{
+			if (autonomous)
+			{
+				return _unitOfWorkCreator(_factory, null);
+			}
 			var context = MessageContext.GetCurrent();
 			var result = _unitOfWorkCreator(_factory, context);
 			// Remove from context on disposal..
@@ -72,6 +74,11 @@ namespace Rebus.AdoNet
 			context.Items.Add(CONTEXT_ITEM_KEY, result);
 
 			return result;
+		}
+
+		public IUnitOfWork Create()
+		{
+			return Create(false);
 		}
 	}
 }

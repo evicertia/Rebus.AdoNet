@@ -17,5 +17,6 @@ namespace Rebus.AdoNet.Schema
 		public bool Nullable { get; set; }
 		public bool Identity { get; set; }
 		public bool Array { get; set; }
+		public object Default { get; set; }
 	}
 }

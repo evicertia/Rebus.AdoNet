@@ -57,7 +57,7 @@ namespace Rebus.AdoNet
 				}
 				catch (DbException ex)
 				{
-					if (!AdoNetExceptionManager.IsDuplicatedKeyException(ex))
+					if (!factory.Dialect.IsDuplicateKeyException(ex))
 						throw;
 				}
 			}

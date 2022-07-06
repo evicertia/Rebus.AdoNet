@@ -34,8 +34,13 @@ namespace Rebus.AdoNet
 		/// <summary>
 		/// Configures Rebus to store sagas in AdoNet.
 		/// </summary>
-		public static AdoNetSagaPersisterFluentConfigurer StoreInAdoNet(this RebusSagasConfigurer configurer, string connectionStringName, string sagaTable, string sagaIndexTable, UOWCreatorDelegate unitOfWorkCreator = null)
+		public static AdoNetSagaPersisterFluentConfigurer StoreInAdoNet(
+			this RebusSagasConfigurer configurer,
+			string connectionStringName,
+			Func<AdoNetUnitOfWorkManager, AdoNetSagaPersister> persisterCreator,
+			Func<AdoNetConnectionFactory, IMessageContext, IAdoNetUnitOfWork> unitOfWorkCreator = null)
 		{
+			Guard.NotNull(() => persisterCreator, persisterCreator);
 			if (unitOfWorkCreator == null) unitOfWorkCreator = (fact, cont) => new AdoNetUnitOfWork(fact, cont);
 
 			var connString = GetConnectionString(connectionStringName);
@@ -43,11 +48,39 @@ namespace Rebus.AdoNet
 			var manager = new AdoNetUnitOfWorkManager(factory, unitOfWorkCreator);
 
 			configurer.Backbone.ConfigureEvents(x => x.AddUnitOfWorkManager(manager));
-			var persister = new AdoNetSagaPersister(manager, sagaTable, sagaIndexTable);
+			var persister = persisterCreator(manager);
 
 			configurer.Use(persister);
 
 			return persister;
+		}
+
+		/// <summary>
+		/// Configures Rebus to store sagas in AdoNet, using the new (advanced) persister using json columns/indexes.
+		/// </summary>
+		public static AdoNetSagaPersisterFluentConfigurer StoreInAdoNet(
+			this RebusSagasConfigurer configurer,
+			string connectionStringName,
+			string sagasTableName,
+			Func<AdoNetConnectionFactory, IMessageContext, IAdoNetUnitOfWork> unitOfWorkCreator = null)
+		{
+			return configurer.StoreInAdoNet(connectionStringName,
+				x => new AdoNetSagaPersisterAdvanced(x, sagasTableName),
+				unitOfWorkCreator);
+		}
+		
+		/// <summary>
+		/// Configures Rebus to store sagas in AdoNet, using the legacy persister (for backwards compat).
+		/// </summary>
+		public static AdoNetSagaPersisterFluentConfigurer StoreInAdoNetUsingLegacyPersister(
+			this RebusSagasConfigurer configurer,
+			string connectionStringName,
+			string sagasTableName, string sagasIndexTableName,
+			Func<AdoNetConnectionFactory, IMessageContext, IAdoNetUnitOfWork> unitOfWorkCreator = null)
+		{
+			return configurer.StoreInAdoNet(connectionStringName,
+				x => new AdoNetSagaPersisterLegacy(x, sagasTableName, sagasIndexTableName),
+				unitOfWorkCreator);
 		}
 
 		/// <summary>

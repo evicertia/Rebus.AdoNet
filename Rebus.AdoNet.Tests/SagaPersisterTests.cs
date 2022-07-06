@@ -17,7 +17,7 @@ using Rebus.Shared;
 
 namespace Rebus.AdoNet
 {
-	[TestFixtureSource(typeof(SagaPersisterTests), nameof(SagaPersisterTests.GetConnectionSources))]
+	[TestFixtureSource(typeof(SagaPersisterTests), nameof(GetConnectionSources))]
 	public class SagaPersisterTests : DatabaseFixtureBase
 	{
 		#region Inner Types
@@ -108,34 +108,33 @@ namespace Rebus.AdoNet
 			public Guid Id { get; set; }
 			public int Revision { get; set; }
 		}
+
+		[Flags]
+		public enum Feature
+		{
+			None = 0,
+			Arrays = (1<<0),
+			Json = (1<<1),
+			Locking = (1<<2),
+			NoWait = (1<<3)
+		}
 		#endregion
 
 		private static readonly ILog _Log = LogManager.GetLogger<SagaPersisterTests>();
 
 		private AdoNetConnectionFactory _factory;
 		private AdoNetUnitOfWorkManager _manager;
-		private readonly bool _useSagaLocking = false;
-		private readonly bool _useSqlArrays = false;
+		private readonly Feature _features; 
 		private const string SagaTableName = "Sagas";
 		private const string SagaIndexTableName = "SagasIndex";
 
-		public SagaPersisterTests(string provider, string connectionString, bool locking, bool arrays)
+		public SagaPersisterTests(string provider, string connectionString, Feature features)
 			: base(provider, connectionString)
 		{
-			_useSagaLocking = locking;
-			_useSqlArrays = arrays;
+			_features = features;
 		}
 
 		#region Message Context Helpers
-
-#if false
-		private IMessageContext _messageContext = null;
-		private static MethodInfo _MessageContextEstablishMethod = typeof(MessageContext)
-				.GetMethod("Establish", BindingFlags.Static | BindingFlags.NonPublic, null, new[] { typeof(IDictionary<string, object>) }, null);
-		private static Func<IDictionary<string, object>, MessageContext> _MessageContextEstablishAccessor =
-			x => (MessageContext)_MessageContextEstablishMethod.Invoke(null, new object[] { x });
-
-#endif
 
 		protected IDisposable EstablishMessageContext()
 		{
@@ -167,6 +166,43 @@ namespace Rebus.AdoNet
 
 		#endregion
 
+		public static IEnumerable<object[]> GetConnectionSources()
+		{
+			var sources = ConnectionSources()
+				.Select(x => new
+				{
+					Provider = x[0],
+					ConnectionString = x[1],
+					Features = NPGSQL_PROVIDER_NAME == (string)x[0] ? (Feature.Arrays | Feature.Json | Feature.Locking | Feature.NoWait) : Feature.None
+				});
+
+			var @base = sources.Select(x => new[] { x.Provider, x.ConnectionString, Feature.None });
+			var extra1 = sources.Where(x => x.Features.HasFlag(Feature.Locking)).Select(x => new[] { x.Provider, x.ConnectionString, (Feature.Locking) });
+			var extra2 = sources.Where(x => x.Features.HasFlag(Feature.Locking|Feature.NoWait)).Select(x => new[] { x.Provider, x.ConnectionString, (Feature.Locking|Feature.NoWait) });
+			var extra3 = sources.Where(x => x.Features.HasFlag(Feature.Arrays)).Select(x => new[] { x.Provider, x.ConnectionString, (Feature.Arrays) });
+			var extra4 = sources.Where(x => x.Features.HasFlag(Feature.Arrays|Feature.Locking)).Select(x => new[] { x.Provider, x.ConnectionString, (Feature.Arrays|Feature.Locking) });
+			var extra5 = sources.Where(x => x.Features.HasFlag(Feature.Arrays|Feature.Locking|Feature.NoWait)).Select(x => new[] { x.Provider, x.ConnectionString, (Feature.Arrays|Feature.Locking|Feature.NoWait) });
+			var extra6 = sources.Where(x => x.Features.HasFlag(Feature.Json)).Select(x => new[] { x.Provider, x.ConnectionString, (Feature.Json) });
+			var extra7 = sources.Where(x => x.Features.HasFlag(Feature.Json|Feature.Locking)).Select(x => new[] { x.Provider, x.ConnectionString, (Feature.Json|Feature.Locking) });
+			var extra8 = sources.Where(x => x.Features.HasFlag(Feature.Json|Feature.Locking|Feature.NoWait)).Select(x => new[] { x.Provider, x.ConnectionString, (Feature.Json|Feature.Locking|Feature.NoWait) });
+
+			return @base.Union(extra1).Union(extra2).Union(extra3).Union(extra4)
+						.Union(extra5).Union(extra6).Union(extra7).Union(extra8);
+		}
+
+		protected AdoNetSagaPersister CreatePersister(bool basic = false)
+		{
+			var result = _features.HasFlag(Feature.Json)
+				? new AdoNetSagaPersisterAdvanced(_manager, SagaTableName) as AdoNetSagaPersister
+				: new AdoNetSagaPersisterLegacy(_manager, SagaTableName, SagaIndexTableName);
+			
+			if (!basic)
+			{
+				if (_features.HasFlag(Feature.Arrays)) result.UseSqlArraysForCorrelationIndexes();
+				if (_features.HasFlag(Feature.Locking)) result.UseLockingOnSagaUpdates(!_features.HasFlag(Feature.NoWait));
+			}
+			return result;
+		}
 		protected void DropSagaTables()
 		{
 			try
@@ -185,47 +221,32 @@ namespace Rebus.AdoNet
 			{
 			}
 		}
-
-		public static IEnumerable<object[]> GetConnectionSources()
-		{
-			var sources = DatabaseFixtureBase.ConnectionSources()
-				.Select(x => new
-				{
-					Provider = x[0],
-					ConnectionString = x[1],
-					SupportsLocking = DatabaseFixtureBase.NPGSQL_PROVIDER_NAME == (string)x[0],
-					SupportsArrays = DatabaseFixtureBase.NPGSQL_PROVIDER_NAME == (string)x[0]
-				});
-
-			var @base = sources.Select(x => new[] { x.Provider, x.ConnectionString, false, false });
-			var extra1 = sources.Where(x => x.SupportsLocking).Select(x => new[] { x.Provider, x.ConnectionString, true, false });
-			var extra2 = sources.Where(x => x.SupportsArrays).Select(x => new[] { x.Provider, x.ConnectionString, false, true });
-			var extra3 = sources.Where(x => x.SupportsLocking && x.SupportsArrays).Select(x => new[] { x.Provider, x.ConnectionString, true, true });
-
-			return @base.Union(extra1).Union(extra2).Union(extra3);
-		}
-
-		protected AdoNetSagaPersister CreatePersister(bool createTables = false, bool useLocking = false, bool useNoWaitLocking = false)
-		{
-			var result = new AdoNetSagaPersister(_manager, SagaTableName, SagaIndexTableName);
-			if (_useSqlArrays) result.UseSqlArraysForCorrelationIndexes();
-			if (createTables) result.EnsureTablesAreCreated();
-			if (useLocking) result.UseLockingOnSagaUpdates(!useNoWaitLocking);
-			return result;
-		}
-
+		
 		[OneTimeSetUp]
 		public void OneTimeSetup()
 		{
 			_factory = new AdoNetConnectionFactory(ConnectionString, ProviderName);
 			_manager = new AdoNetUnitOfWorkManager(_factory, (fact, cont) => new AdoNetUnitOfWork(fact, cont));
+
+			DropSagaTables();
+
+			if (ProviderName == NPGSQL_PROVIDER_NAME)
+			{
+				// On PostgreSql we use GIN on some tests..
+				ExecuteCommand("CREATE EXTENSION IF NOT EXISTS btree_gin;");
+			}
+
+			var persister = CreatePersister();
+			persister.EnsureTablesAreCreated();
 		}
 
 
 		[SetUp]
 		public new void SetUp()
 		{
-			DropSagaTables();
+			if (!_features.HasFlag(Feature.Json)) ExecuteCommand($"DELETE FROM \"{SagaIndexTableName}\";");
+			ExecuteCommand($"DELETE FROM \"{SagaTableName}\";");
+			
 			Disposables.TrackDisposable(EstablishMessageContext()); //< Initial (fake) message under each test will run.
 		}
 
@@ -234,7 +255,7 @@ namespace Rebus.AdoNet
 		[Test]
 		public void InsertDoesPersistSagaData()
 		{
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var propertyName = Reflect.Path<SomePieceOfSagaData>(d => d.PropertyThatCanBeNull);
 			var dataWithIndexedNullProperty = new SomePieceOfSagaData { SomeValueWeCanRecognize = "hello" };
 
@@ -248,7 +269,7 @@ namespace Rebus.AdoNet
 		[Test]
 		public void WhenIgnoringNullProperties_DoesNotSaveNullPropertiesOnUpdate()
 		{
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 
 			persister.DoNotIndexNullProperties();
 
@@ -278,7 +299,7 @@ namespace Rebus.AdoNet
 		[Test]
 		public void WhenIgnoringNullProperties_DoesNotSaveNullPropertiesOnInsert()
 		{
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 
 			persister.DoNotIndexNullProperties();
 
@@ -319,23 +340,31 @@ namespace Rebus.AdoNet
 		public void CanCreateSagaTablesAutomatically()
 		{
 			// arrange
-
+			var persister = CreatePersister();
+				
 			// act
-			CreatePersister().EnsureTablesAreCreated();
+			persister.EnsureTablesAreCreated();
 
 			// assert
 			var existingTables = GetTableNames();
-			Assert.That(existingTables, Contains.Item(SagaIndexTableName));
 			Assert.That(existingTables, Contains.Item(SagaTableName));
+			
+			if (persister is AdoNetSagaPersisterLegacy)
+				Assert.That(existingTables, Contains.Item(SagaIndexTableName));
+			
+			// FIXME: Additional asserts depending on each case
+			//  - Ensure index columns are text/array/json..
+			//  - Ensure right indexes were created..
 		}
 
 		[Test]
 		public void DoesntDoAnythingIfTheTablesAreAlreadyThere()
 		{
 			// arrange
+			//DropSagaTables();
 			var persister = CreatePersister();
-			ExecuteCommand(@"CREATE TABLE """ + SagaTableName + @""" (""id"" INT NOT NULL)");
-			ExecuteCommand(@"CREATE TABLE """ + SagaIndexTableName + @""" (""id"" INT NOT NULL)");
+			//ExecuteCommand(@"CREATE TABLE """ + SagaTableName + @""" (""id"" INT NOT NULL)");
+			//ExecuteCommand(@"CREATE TABLE """ + SagaIndexTableName + @""" (""id"" INT NOT NULL)");
 
 			// act
 
@@ -345,6 +374,8 @@ namespace Rebus.AdoNet
 			persister.EnsureTablesAreCreated();
 		}
 
+		// FIXME: Add more tests with different kind of values (Dates, Decimal, Float, etc.), ensuring persisted entries can be found later on.
+		
 		#endregion
 
 		#region Advanced Saga Persister tests
@@ -363,7 +394,7 @@ namespace Rebus.AdoNet
 
 			var foundSagaData = persister.Find<GenericSagaData<TProperty>>(propertyName, propertyValueToUse);
 
-			Assert.That(foundSagaData.Id, Is.EqualTo(savedSagaDataId));
+			Assert.That(foundSagaData?.Id, Is.EqualTo(savedSagaDataId));
 		}
 
 		private MySagaData SagaData(int someNumber, string textInSomeField)
@@ -389,7 +420,7 @@ namespace Rebus.AdoNet
 		[Test]
 		public void CanFindAndUpdateSagaDataByCorrelationPropertyWithNull()
 		{
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var propertyName = Reflect.Path<SomePieceOfSagaData>(d => d.PropertyThatCanBeNull);
 			var dataWithIndexedNullProperty = new SomePieceOfSagaData { Id = Guid.NewGuid(), SomeValueWeCanRecognize = "hello" };
 
@@ -408,7 +439,7 @@ namespace Rebus.AdoNet
 		[Test]
 		public void PersisterCanFindSagaByPropertiesWithDifferentDataTypes()
 		{
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			TestFindSagaByPropertyWithType(persister, "Hello worlds!!");
 			TestFindSagaByPropertyWithType(persister, 23);
 			TestFindSagaByPropertyWithType(persister, Guid.NewGuid());
@@ -417,7 +448,7 @@ namespace Rebus.AdoNet
 		[Test]
 		public void PersisterCanFindSagaById()
 		{
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var savedSagaData = new MySagaData();
 			var savedSagaDataId = Guid.NewGuid();
 			savedSagaData.Id = savedSagaDataId;
@@ -431,7 +462,7 @@ namespace Rebus.AdoNet
 		[Test]
 		public void PersistsComplexSagaLikeExpected()
 		{
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var sagaDataId = Guid.NewGuid();
 
 			var complexPieceOfSagaData =
@@ -465,7 +496,7 @@ namespace Rebus.AdoNet
 		{
 			const string someStringValue = "whoolala";
 
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var mySagaDataId = Guid.NewGuid();
 			var mySagaData = new SimpleSagaData
 			{
@@ -485,7 +516,7 @@ namespace Rebus.AdoNet
 		[Test]
 		public void CanFindSagaByPropertyValues()
 		{
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 
 			persister.Insert(SagaData(1, "some field 1"), new[] { "AnotherField" });
 			persister.Insert(SagaData(2, "some field 2"), new[] { "AnotherField" });
@@ -497,29 +528,31 @@ namespace Rebus.AdoNet
 
 			Assert.That(dataViaNonexistentField, Is.Null);
 			Assert.That(dataViaNonexistentValue, Is.Null);
-			Assert.That(mySagaData.SomeField, Is.EqualTo("2"));
+			Assert.That(mySagaData, Is.Not.Null);
+			Assert.That(mySagaData?.SomeField, Is.EqualTo("2"));
 		}
 
 		[Test]
 		public void CanFindSagaWithIEnumerableAsCorrelatorId()
 		{
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 
 			persister.Insert(EnumerableSagaData(3, new string[] { "Field 1", "Field 2", "Field 3"}), new[] { "AnotherFields" });
 
 			var dataViaNonexistentValue = persister.Find<IEnumerableSagaData>("AnotherFields", "non-existent value");
 			var dataViaNonexistentField = persister.Find<IEnumerableSagaData>("SomeFieldThatDoesNotExist", "doesn't matter");
 			var mySagaData = persister.Find<IEnumerableSagaData>("AnotherFields", "Field 3");
-
+			
 			Assert.That(dataViaNonexistentField, Is.Null);
 			Assert.That(dataViaNonexistentValue, Is.Null);
+			Assert.That(mySagaData, Is.Not.Null);
 			Assert.That(mySagaData?.SomeField, Is.EqualTo("3"));
 		}
 
 		[Test]
 		public void SamePersisterCanSaveMultipleTypesOfSagaDatas()
 		{
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var sagaId1 = Guid.NewGuid();
 			var sagaId2 = Guid.NewGuid();
 			persister.Insert(new SimpleSagaData { Id = sagaId1, SomeString = "Ol�" }, new[] { "Id" });
@@ -538,7 +571,7 @@ namespace Rebus.AdoNet
 		{
 			const string stringValue = "I expect to find something with this string!";
 
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var path = Reflect.Path<SagaDataWithNestedElement>(d => d.ThisOneIsNested.SomeString);
 
 			persister.Insert(new SagaDataWithNestedElement
@@ -553,8 +586,8 @@ namespace Rebus.AdoNet
 
 			var loadedSagaData = persister.Find<SagaDataWithNestedElement>(path, stringValue);
 
-			Assert.That(loadedSagaData.ThisOneIsNested, Is.Not.Null);
-			Assert.That(loadedSagaData.ThisOneIsNested.SomeString, Is.EqualTo(stringValue));
+			Assert.That(loadedSagaData?.ThisOneIsNested, Is.Not.Null);
+			Assert.That(loadedSagaData?.ThisOneIsNested.SomeString, Is.EqualTo(stringValue));
 		}
 
 		#endregion
@@ -575,7 +608,7 @@ namespace Rebus.AdoNet
 			// arrange
 			const string theValue = "this is just some value";
 
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var firstSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
 
 			var propertyPath = Reflect.Path<SomeSaga>(s => s.SomeCorrelationId);
@@ -593,7 +626,7 @@ namespace Rebus.AdoNet
 		public void CannotInsertAnotherSagaWithDuplicateCorrelationId()
 		{
 			// arrange
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var theValue = "this just happens to be the same in two sagas";
 			var firstSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
 			var secondSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
@@ -616,7 +649,7 @@ namespace Rebus.AdoNet
 		public void CannotUpdateAnotherSagaWithDuplicateCorrelationId()
 		{
 			// arrange  
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var theValue = "this just happens to be the same in two sagas";
 			var firstSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
 			var secondSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = "other value" };
@@ -642,7 +675,7 @@ namespace Rebus.AdoNet
 		public void CanInsertAnotherSagaWithDuplicateCorrelationId()
 		{
 			// arrange
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var theValue = "this just happens to be the same in two sagas";
 			var firstSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
 			var secondSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
@@ -666,7 +699,7 @@ namespace Rebus.AdoNet
 		public void CanUpdateAnotherSagaWithDuplicateCorrelationId()
 		{
 			// arrange  
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var theValue = "this just happens to be the same in two sagas";
 			var firstSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = theValue };
 			var secondSaga = new SomeSaga { Id = Guid.NewGuid(), SomeCorrelationId = "other value" };
@@ -692,7 +725,7 @@ namespace Rebus.AdoNet
 		[Test]
 		public void EnsuresUniquenessAlsoOnCorrelationPropertyWithNull()
 		{
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var propertyName = Reflect.Path<SomePieceOfSagaData>(d => d.PropertyThatCanBeNull);
 			var dataWithIndexedNullProperty = new SomePieceOfSagaData { Id = Guid.NewGuid(), SomeValueWeCanRecognize = "hello" };
 			var anotherPieceOfDataWithIndexedNullProperty = new SomePieceOfSagaData { Id = Guid.NewGuid(), SomeValueWeCanRecognize = "hello" };
@@ -712,13 +745,16 @@ namespace Rebus.AdoNet
 		[Test]
 		public void UsesOptimisticLockingAndDetectsRaceConditionsWhenUpdatingFindingBySomeProperty()
 		{
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var indexBySomeString = new[] { "SomeString" };
 			var id = Guid.NewGuid();
 			var simpleSagaData = new SimpleSagaData { Id = id, SomeString = "hello world!" };
 			persister.Insert(simpleSagaData, indexBySomeString);
 
 			var sagaData1 = persister.Find<SimpleSagaData>("SomeString", "hello world!");
+			
+			Assert.That(sagaData1, Is.Not.Null);
+			
 			sagaData1.SomeString = "I changed this on one worker";
 
 			using (EnterAFakeMessageContext())
@@ -734,7 +770,7 @@ namespace Rebus.AdoNet
 		[Test]
 		public void UsesOptimisticLockingAndDetectsRaceConditionsWhenUpdatingFindingById()
 		{
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var indexBySomeString = new[] { "Id" };
 			var id = Guid.NewGuid();
 			var simpleSagaData = new SimpleSagaData { Id = id, SomeString = "hello world!" };
@@ -756,7 +792,7 @@ namespace Rebus.AdoNet
 		[Test]
 		public void ConcurrentDeleteAndUpdateThrowsOnUpdate()
 		{
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var indexBySomeString = new[] { "Id" };
 			var id = Guid.NewGuid();
 			var simpleSagaData = new SimpleSagaData { Id = id };
@@ -777,7 +813,7 @@ namespace Rebus.AdoNet
 		[Test]
 		public void ConcurrentDeleteAndUpdateThrowsOnDelete()
 		{
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var indexBySomeString = new[] { "Id" };
 			var id = Guid.NewGuid();
 			var simpleSagaData = new SimpleSagaData { Id = id };
@@ -799,7 +835,7 @@ namespace Rebus.AdoNet
 		public void InsertingTheSameSagaDataTwiceGeneratesAnError()
 		{
 			// arrange
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var sagaDataPropertyPathsToIndex = new[] { Reflect.Path<SimpleSagaData>(d => d.Id) };
 
 			var sagaId = Guid.NewGuid();
@@ -820,7 +856,7 @@ namespace Rebus.AdoNet
 		[Test]
 		public void CanInsertTwoSagasUnderASingleUoW()
 		{
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var sagaId1 = Guid.NewGuid();
 			var sagaId2 = Guid.NewGuid();
 
@@ -845,7 +881,7 @@ namespace Rebus.AdoNet
 		[Test]
 		public void NoChangesAreMadeWhenUoWIsNotCommitted()
 		{
-			var persister = CreatePersister(createTables: true);
+			var persister = CreatePersister();
 			var sagaId1 = Guid.NewGuid();
 			var sagaId2 = Guid.NewGuid();
 
@@ -874,34 +910,38 @@ namespace Rebus.AdoNet
 		public void FindSameSagaTwiceThrowsOnNoWait()
 		{
 			// Skip this test on sqlite, as it does not support locking.
-			if (ProviderName == GetSqliteProviderName())
+			if (!_features.HasFlag(Feature.NoWait))
 			{
-				Assert.Ignore("Test not supported on sqlite database.");
+				Assert.Ignore("Test not supported when NoWait Locking is disabled or unsupported.");
 				return;
 			}
 
-			var persister = CreatePersister(createTables: true, useLocking: true, useNoWaitLocking: true);
+			var persister = CreatePersister();
 			var savedSagaData = new MySagaData();
 			var savedSagaDataId = Guid.NewGuid();
 			savedSagaData.Id = savedSagaDataId;
 			persister.Insert(savedSagaData, new string[0]);
 
 			using (_manager.Create())
+			using (_manager.GetScope(autocomplete: true))
 			{
 				persister.Find<MySagaData>("Id", savedSagaDataId);
 
 				Assert.Throws<AdoNetSagaLockedException>(() =>
 				{
-				//	using (var thread = new CrossThreadRunner(() =>
-				//	{
+					//using (var thread = new CrossThreadRunner(() =>
+					//{
 						using (EnterAFakeMessageContext())
+						//using (_manager.Create())
+						//using (_manager.GetScope(autocomplete: true))
 						{
+							//_manager.GetScope().Connection.ExecuteCommand("SET TRANSACTION ISOLATION LEVEL  READ COMMITTED;");
 							persister.Find<MySagaData>("Id", savedSagaDataId);
 						}
-				//	}))
-				//	{
-				//		thread.Run();
-				//	}
+					//}))
+					//{
+					//	thread.Run();
+					//}
 				});
 			}
 		}
