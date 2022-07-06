@@ -432,7 +432,7 @@ namespace Rebus.AdoNet.Dialects
 					GetColumnType(column.DbType, column.Length, column.Precision, column.Scale, column.Identity, column.Array, primaryKey),
 					column.Nullable ? "" : "NOT NULL",
 					(table.Columns.Last() == column) ? "" : ",",
-					column.Default == null ? "" : $"DEFAULT {default}"
+					column.Default == null ? "" : $"DEFAULT {@default}"
 				);
 			}
 
