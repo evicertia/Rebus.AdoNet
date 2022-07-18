@@ -19,7 +19,7 @@ namespace Rebus.AdoNet
 {
 	/// <summary>
 	/// Implements a saga persister for Rebus that stores sagas using an AdoNet provider.
-	/// This is an advanced implementation using single-table scheme for saga & indexes. 
+	/// This is an advanced implementation using single-table scheme for saga & indexes.
 	/// </summary>
 	public class AdoNetSagaPersisterAdvanced : AdoNetSagaPersister, IStoreSagaData, AdoNetSagaPersisterFluentConfigurer, ICanUpdateMultipleSagaDatasAtomically
 	{
@@ -30,7 +30,8 @@ namespace Rebus.AdoNet
 		private const string SAGA_REVISION_COLUMN = "revision";
 		private const string SAGA_CORRELATIONS_COLUMN = "correlations";
 		private static ILog log;
-		// FIXME? Maybe we should implement our own micro-serialization logic, so we can control actual conversions.
+
+		// TODO?: Maybe we should implement our own micro-serialization logic, so we can control actual conversions.
 		//		  I am thinking for example on issues with preccision on decimals, etc. (pruiz)
 		private static readonly JsonSerializerSettings IndexSerializerSettings = new JsonSerializerSettings {
 			Culture =  CultureInfo.InvariantCulture,
@@ -40,7 +41,7 @@ namespace Rebus.AdoNet
 				new StringEnumConverter()
 			}
 		};
-		
+
 		private readonly AdoNetUnitOfWorkManager manager;
 		private readonly string sagasTableName;
 		private readonly string idPropertyName;
@@ -86,13 +87,13 @@ namespace Rebus.AdoNet
 					log.Debug("Table '{0}' already exists.", sagasTableName);
 					return this;
 				}
-				
+
 				if (UseSqlArrays /* && !dialect.SupportsArrayTypes*/)
 				{
 					throw new ApplicationException("Enabled UseSqlArraysForCorrelationIndexes AdoNetSagaPersister selecte does not support arrays?!");
 					//throw new ApplicationException("Enabled UseSqlArraysForCorrelationIndexes but underlaying database does not support arrays?!");
 				}
-				
+
 				var indexes = new[] {
 					new AdoNetIndex() {
 						Name = $"ix_{sagasTableName}_{SAGA_ID_COLUMN}_{SAGA_TYPE_COLUMN}",
@@ -119,7 +120,7 @@ namespace Rebus.AdoNet
 						});
 					}
 				}
-				
+
 				using (var command = connection.CreateCommand())
 				{
 					command.CommandText = scope.Dialect.FormatCreateTable(
@@ -237,7 +238,7 @@ namespace Rebus.AdoNet
 				scope.Complete();
 			}
 		}
-		
+
 		public override void Delete(ISagaData sagaData)
 		{
 			using (var scope = manager.GetScope())
@@ -358,7 +359,11 @@ namespace Rebus.AdoNet
 							    s.{sagaCorrelationsCol} @> {dialect.Cast(sagaCorrelationsValuesParam, DbType.Object)}
 							  )
 						{forUpdate};".Replace("\t", "");
-					
+
+					var type = fieldFromMessage?.GetType();
+					if (type != null && type.IsGenericType && type.GetGenericTypeDefinition() == typeof(KeyValuePair<,>))
+						throw new NotSupportedException("Using a KeyValuePair<,> as correlation is not supported.");
+
 					var value = SerializeCorrelations(new Dictionary<string, object>() { { sagaDataPropertyPath, fieldFromMessage } });
 					var values = SerializeCorrelations(new Dictionary<string, object>() { { sagaDataPropertyPath, new[] { fieldFromMessage } } });
 
@@ -366,7 +371,7 @@ namespace Rebus.AdoNet
 					command.AddParameter(sagaCorrelationsValueParam, DbType.String, value);
 					command.AddParameter(sagaCorrelationsValuesParam, DbType.String, values);
 				}
-				
+
 				try
 				{
 					log.Debug("Finding saga of type {0} with {1} = {2}\n{3}", sagaType, sagaDataPropertyPath,
@@ -387,7 +392,7 @@ namespace Rebus.AdoNet
 				}
 			}
 		}
-		
+
 		#endregion
 	}
 }

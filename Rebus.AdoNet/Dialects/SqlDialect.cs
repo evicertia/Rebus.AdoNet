@@ -139,6 +139,11 @@ namespace Rebus.AdoNet.Dialects
 			return _typeNames.GetLongest(dbType);
 		}
 
+		/// <summary>
+		/// Reverse search for *testing purpose* in order to get (for each dialect) the related DBType..
+		/// </summary>
+		internal virtual DbType GetDbTypeFor(string name) => _typeNames.Defaults.First(x => x.Value.ToLowerInvariant() == name.ToLowerInvariant()).Key;
+
 		#endregion
 
 		#region Identifier quoting support
@@ -201,14 +206,14 @@ namespace Rebus.AdoNet.Dialects
 		/// <p>
 		/// This method assumes that the name is not already Quoted.  So if the name passed
 		/// in is <c>"name</c> then it will return <c>"""name"</c>.  It escapes the first char
-		/// - the " with "" and encloses the escaped string with OpenQuote and CloseQuote. 
+		/// - the " with "" and encloses the escaped string with OpenQuote and CloseQuote.
 		/// </p>
 		/// </remarks>
 		protected virtual string Quote(string name)
 		{
 			string quotedName = name.Replace(OpenQuote.ToString(), new string(OpenQuote, 2));
 
-			// in some dbs the Open and Close Quote are the same chars - if they are 
+			// in some dbs the Open and Close Quote are the same chars - if they are
 			// then we don't have to escape the Close Quote char because we already
 			// got it.
 			if (OpenQuote != CloseQuote)
@@ -226,7 +231,7 @@ namespace Rebus.AdoNet.Dialects
 		/// <returns>Unquoted string</returns>
 		/// <remarks>
 		/// <p>
-		/// This method checks the string <c>quoted</c> to see if it is 
+		/// This method checks the string <c>quoted</c> to see if it is
 		/// quoted.  If the string <c>quoted</c> is already enclosed in the OpenQuote
 		/// and CloseQuote then those chars are removed.
 		/// </p>
@@ -239,7 +244,7 @@ namespace Rebus.AdoNet.Dialects
 		/// The following quoted values return these results
 		/// "quoted" = quoted
 		/// "quote""d" = quote"d
-		/// quote""d = quote"d 
+		/// quote""d = quote"d
 		/// </p>
 		/// <p>
 		/// If this implementation is not sufficient for your Dialect then it needs to be overridden.
@@ -299,9 +304,9 @@ namespace Rebus.AdoNet.Dialects
 		/// <returns>A Quoted name in the format of OpenQuote + aliasName + CloseQuote</returns>
 		/// <remarks>
 		/// <p>
-		/// If the aliasName is already enclosed in the OpenQuote and CloseQuote then this 
+		/// If the aliasName is already enclosed in the OpenQuote and CloseQuote then this
 		/// method will return the aliasName that was passed in without going through any
-		/// Quoting process.  So if aliasName is passed in already Quoted make sure that 
+		/// Quoting process.  So if aliasName is passed in already Quoted make sure that
 		/// you have escaped all of the chars according to your DataBase's specifications.
 		/// </p>
 		/// </remarks>
@@ -318,9 +323,9 @@ namespace Rebus.AdoNet.Dialects
 		/// <returns>A Quoted name in the format of OpenQuote + columnName + CloseQuote</returns>
 		/// <remarks>
 		/// <p>
-		/// If the columnName is already enclosed in the OpenQuote and CloseQuote then this 
+		/// If the columnName is already enclosed in the OpenQuote and CloseQuote then this
 		/// method will return the columnName that was passed in without going through any
-		/// Quoting process.  So if columnName is passed in already Quoted make sure that 
+		/// Quoting process.  So if columnName is passed in already Quoted make sure that
 		/// you have escaped all of the chars according to your DataBase's specifications.
 		/// </p>
 		/// </remarks>
@@ -336,9 +341,9 @@ namespace Rebus.AdoNet.Dialects
 		/// <returns>A Quoted name in the format of OpenQuote + tableName + CloseQuote</returns>
 		/// <remarks>
 		/// <p>
-		/// If the tableName is already enclosed in the OpenQuote and CloseQuote then this 
+		/// If the tableName is already enclosed in the OpenQuote and CloseQuote then this
 		/// method will return the tableName that was passed in without going through any
-		/// Quoting process.  So if tableName is passed in already Quoted make sure that 
+		/// Quoting process.  So if tableName is passed in already Quoted make sure that
 		/// you have escaped all of the chars according to your DataBase's specifications.
 		/// </p>
 		/// </remarks>
@@ -348,7 +353,7 @@ namespace Rebus.AdoNet.Dialects
 		}
 
 		/// <summary>
-		/// Casts an SQL expression to db's DbType equivalent. 
+		/// Casts an SQL expression to db's DbType equivalent.
 		/// </summary>
 		/// <param name="expression"></param>
 		/// <param name="type"></param>
@@ -481,7 +486,7 @@ namespace Rebus.AdoNet.Dialects
 			{
 				columns = columns.Select(x => QuoteForColumnName(x)).ToArray();
 			}
-			
+
 			return string.Format("CREATE INDEX {0} ON {1} {2} ({3});",
 				!string.IsNullOrEmpty(index.Name) ? QuoteForTableName(index.Name) : "",
 				QuoteForTableName(table.Name),
@@ -512,7 +517,7 @@ namespace Rebus.AdoNet.Dialects
 			throw new NotImplementedException("IsDuplicateKeyException not implemented for this dialect!");
 		}
 		#endregion
-		
+
 		#region AdvisoryLockFunctions
 		public virtual bool SupportsTryAdvisoryLockFunction => false;
 		public virtual bool SupportsTryAdvisoryXactLockFunction => false;
@@ -548,7 +553,7 @@ namespace Rebus.AdoNet.Dialects
 			throw new NotSupportedException("ArrayAny function not supported by this dialect.");
 		}
 		#endregion
-		
+
 		#region GIN Indexing
 		public virtual bool SupportsGinIndexes => false;
 

@@ -108,6 +108,61 @@ namespace Rebus.AdoNet
 			}
 		}
 
+		/// <summary>
+		/// Fetch the column names with their data types..
+		///		where the Tuple.Item1 is the column name and the Tuple.Item2 is the data type.
+		/// </summary>
+		protected IEnumerable<Tuple<string, string>> GetColumnSchemaFor(string tableName)
+		{
+			using (var connection = Factory.CreateConnection())
+			{
+				connection.ConnectionString = ConnectionString;
+				connection.Open();
+
+				// XXX: In order, to retrieve the schema information we can specify
+				//		the catalog (0), schema (1), table name (2) and column name (3).
+				var restrictions = new string[4];
+				restrictions[2] = tableName;
+
+				var data = new List<Tuple<string, string>>();
+				var schemas = connection.GetSchema("Columns", restrictions);
+
+				foreach (DataRow row in schemas.Rows)
+				{
+					var name = row["COLUMN_NAME"] as string;
+					var type = row["DATA_TYPE"] as string;
+					data.Add(Tuple.Create(name, type));
+				}
+
+				return data.ToArray();
+			}
+		}
+
+		/// <summary>
+		/// Retrieve table's indexes for a specific table.
+		/// </summary>
+		protected IEnumerable<string> GetIndexesFor(string tableName)
+		{
+			using (var connection = Factory.CreateConnection())
+			{
+				connection.ConnectionString = ConnectionString;
+				connection.Open();
+
+				// XXX: In order, to retrieve the schema information we can specify
+				//		the catalog (0), schema (1), table name (2) and column name (3).
+				var restrictions = new string[4];
+				restrictions[2] = tableName;
+
+				var data = new List<string>();
+				var schemas = connection.GetSchema("Indexes", restrictions);
+
+				foreach (DataRow row in schemas.Rows)
+					data.Add(row["INDEX_NAME"] as string);
+
+				return data.ToArray();
+			}
+		}
+
 		protected void DropTable(string tableName)
 		{
 			if (!GetTableNames().Contains(tableName, StringComparer.InvariantCultureIgnoreCase)) return;

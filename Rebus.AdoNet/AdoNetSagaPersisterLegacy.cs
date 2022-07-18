@@ -36,7 +36,7 @@ namespace Rebus.AdoNet
 		private readonly string sagasIndexTableName;
 		private readonly string sagasTableName;
 		private readonly string idPropertyName;
-		
+
 		static AdoNetSagaPersisterLegacy()
 		{
 			RebusLoggerFactory.Changed += f => log = f.GetCurrentClassLogger();
@@ -93,7 +93,7 @@ namespace Rebus.AdoNet
 				}
 
 				log.Info("Tables '{0}' and '{1}' do not exist - they will be created now", sagasTableName, sagasIndexTableName);
-				
+
 				using (var command = connection.CreateCommand())
 				{
 					command.CommandText = scope.Dialect.FormatCreateTable(
@@ -147,7 +147,7 @@ namespace Rebus.AdoNet
 							}
 						}
 					);
-					
+
 					command.ExecuteNonQuery();
 				}
 
@@ -157,7 +157,7 @@ namespace Rebus.AdoNet
 
 			return this;
 		}
-		
+
 		#endregion
 
 		public override void Insert(ISagaData sagaData, string[] sagaDataPropertyPathsToIndex)
@@ -350,7 +350,7 @@ namespace Rebus.AdoNet
 					dialect.EscapeParameter(p.PropertyValueParameter),
 					dialect.EscapeParameter(p.PropertyValuesParameter)
 				));
-						
+
 			using (var command = connection.CreateCommand())
 			{
 				command.CommandText = string.Format(
@@ -462,7 +462,6 @@ namespace Rebus.AdoNet
 				}
 				catch (DbException exception)
 				{
-					// FIXME: Ensure exception is the right one..
 					throw new OptimisticLockingException(sagaData, exception);
 				}
 			}
@@ -473,7 +472,7 @@ namespace Rebus.AdoNet
 				using (var command = connection.CreateCommand())
 				{
 					command.CommandText = string.Format(
-						"UPDATE {0} SET {1} = {2}, {3} = {4} " + 
+						"UPDATE {0} SET {1} = {2}, {3} = {4} " +
 						"WHERE {5} = {6} AND {7} = {8};",
 						dialect.QuoteForTableName(sagasIndexTableName),		//< 0
 						dialect.QuoteForColumnName(SAGAINDEX_VALUE_COLUMN),	//< 1
@@ -675,7 +674,7 @@ namespace Rebus.AdoNet
 
 			return string.Empty;
 		}
-		
+
 		private bool ArraysEnabledFor(SqlDialect dialect)
 		{
 			return UseSqlArrays && dialect.SupportsArrayTypes;
@@ -744,7 +743,7 @@ namespace Rebus.AdoNet
 			return sb.ToString();
 		}
 
-		protected override string Fetch<TSagaData>(string sagaDataPropertyPath, object fieldFromMessage) 
+		protected override string Fetch<TSagaData>(string sagaDataPropertyPath, object fieldFromMessage)
 		{
 			using (var scope = Manager.GetScope(autocomplete: true))
 			{
@@ -760,7 +759,7 @@ namespace Rebus.AdoNet
 					if (UseNoWaitSagaLocking && !dialect.SupportsSelectForWithNoWait)
 						throw new InvalidOperationException($"You can't use saga locking with no-wait for a Dialect {dialect.GetType()} that does not supports no-wait clause.");
 				}
-					
+
 				using (var command = connection.CreateCommand())
 				{
 					if (sagaDataPropertyPath == idPropertyName)
@@ -801,7 +800,7 @@ namespace Rebus.AdoNet
 						var valuesPredicate = ArraysEnabledFor(dialect)
 							? dialect.FormatArrayAny($"i.{indexValuesCol}", indexValuesParm)
 							: $"(i.{indexValuesCol} LIKE ('%' || {indexValuesParm} || '%'))";
-						
+
 						command.CommandText = $@"
 							SELECT s.{dataCol}
 							FROM {sagaTblName} s
@@ -819,7 +818,7 @@ namespace Rebus.AdoNet
 									END
 								  )
 							{forUpdate};".Replace("\t", "");
-						
+
 						var value = GetIndexValue(fieldFromMessage);
 						var values = value == null ? DBNull.Value : ArraysEnabledFor(dialect)
 							? (object)(new[] { value })

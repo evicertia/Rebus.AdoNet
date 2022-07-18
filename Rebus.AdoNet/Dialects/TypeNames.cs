@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Data;
 using System.Text;
 
@@ -33,7 +34,7 @@ namespace Rebus.AdoNet.Dialects
 	/// would result in
 	/// <code>
 	///     Names.Get(DbType)           // --> "VARCHAR($l)" (will cause trouble)
-	///     Names.Get(DbType,100)       // --> "VARCHAR(100)" 
+	///     Names.Get(DbType,100)       // --> "VARCHAR(100)"
 	///     Names.Get(DbType,1000)  // --> "VARCHAR(1000)"
 	///     Names.Get(DbType,10000) // --> "VARCHAR(10000)"
 	/// </code>
@@ -48,7 +49,12 @@ namespace Rebus.AdoNet.Dialects
 		private readonly Dictionary<DbType, string> defaults = new Dictionary<DbType, string>();
 
 		/// <summary>
-		/// 
+		/// Expose defaults as a readonly collection for testing purpose..
+		/// </summary>
+		internal IReadOnlyDictionary<DbType, string> Defaults => new ReadOnlyDictionary<DbType, string>(defaults);
+
+		/// <summary>
+		///
 		/// </summary>
 		/// <param name="template"></param>
 		/// <param name="placeholder"></param>
@@ -164,7 +170,7 @@ namespace Rebus.AdoNet.Dialects
 		}
 
 		/// <summary>
-		/// 
+		///
 		/// </summary>
 		/// <param name="typecode"></param>
 		/// <param name="value"></param>
