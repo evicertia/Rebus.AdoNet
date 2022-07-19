@@ -201,14 +201,14 @@ namespace Rebus.AdoNet.Dialects
 		/// <p>
 		/// This method assumes that the name is not already Quoted.  So if the name passed
 		/// in is <c>"name</c> then it will return <c>"""name"</c>.  It escapes the first char
-		/// - the " with "" and encloses the escaped string with OpenQuote and CloseQuote. 
+		/// - the " with "" and encloses the escaped string with OpenQuote and CloseQuote.
 		/// </p>
 		/// </remarks>
 		protected virtual string Quote(string name)
 		{
 			string quotedName = name.Replace(OpenQuote.ToString(), new string(OpenQuote, 2));
 
-			// in some dbs the Open and Close Quote are the same chars - if they are 
+			// in some dbs the Open and Close Quote are the same chars - if they are
 			// then we don't have to escape the Close Quote char because we already
 			// got it.
 			if (OpenQuote != CloseQuote)
@@ -226,7 +226,7 @@ namespace Rebus.AdoNet.Dialects
 		/// <returns>Unquoted string</returns>
 		/// <remarks>
 		/// <p>
-		/// This method checks the string <c>quoted</c> to see if it is 
+		/// This method checks the string <c>quoted</c> to see if it is
 		/// quoted.  If the string <c>quoted</c> is already enclosed in the OpenQuote
 		/// and CloseQuote then those chars are removed.
 		/// </p>
@@ -239,7 +239,7 @@ namespace Rebus.AdoNet.Dialects
 		/// The following quoted values return these results
 		/// "quoted" = quoted
 		/// "quote""d" = quote"d
-		/// quote""d = quote"d 
+		/// quote""d = quote"d
 		/// </p>
 		/// <p>
 		/// If this implementation is not sufficient for your Dialect then it needs to be overridden.
@@ -299,9 +299,9 @@ namespace Rebus.AdoNet.Dialects
 		/// <returns>A Quoted name in the format of OpenQuote + aliasName + CloseQuote</returns>
 		/// <remarks>
 		/// <p>
-		/// If the aliasName is already enclosed in the OpenQuote and CloseQuote then this 
+		/// If the aliasName is already enclosed in the OpenQuote and CloseQuote then this
 		/// method will return the aliasName that was passed in without going through any
-		/// Quoting process.  So if aliasName is passed in already Quoted make sure that 
+		/// Quoting process.  So if aliasName is passed in already Quoted make sure that
 		/// you have escaped all of the chars according to your DataBase's specifications.
 		/// </p>
 		/// </remarks>
@@ -318,9 +318,9 @@ namespace Rebus.AdoNet.Dialects
 		/// <returns>A Quoted name in the format of OpenQuote + columnName + CloseQuote</returns>
 		/// <remarks>
 		/// <p>
-		/// If the columnName is already enclosed in the OpenQuote and CloseQuote then this 
+		/// If the columnName is already enclosed in the OpenQuote and CloseQuote then this
 		/// method will return the columnName that was passed in without going through any
-		/// Quoting process.  So if columnName is passed in already Quoted make sure that 
+		/// Quoting process.  So if columnName is passed in already Quoted make sure that
 		/// you have escaped all of the chars according to your DataBase's specifications.
 		/// </p>
 		/// </remarks>
@@ -336,9 +336,9 @@ namespace Rebus.AdoNet.Dialects
 		/// <returns>A Quoted name in the format of OpenQuote + tableName + CloseQuote</returns>
 		/// <remarks>
 		/// <p>
-		/// If the tableName is already enclosed in the OpenQuote and CloseQuote then this 
+		/// If the tableName is already enclosed in the OpenQuote and CloseQuote then this
 		/// method will return the tableName that was passed in without going through any
-		/// Quoting process.  So if tableName is passed in already Quoted make sure that 
+		/// Quoting process.  So if tableName is passed in already Quoted make sure that
 		/// you have escaped all of the chars according to your DataBase's specifications.
 		/// </p>
 		/// </remarks>
@@ -347,6 +347,17 @@ namespace Rebus.AdoNet.Dialects
 			return IsQuoted(tableName) ? tableName : Quote(tableName);
 		}
 
+		/// <summary>
+		/// Casts an SQL expression to db's DbType equivalent.
+		/// </summary>
+		/// <param name="expression"></param>
+		/// <param name="type"></param>
+		/// <returns></returns>
+		public virtual string Cast(string expression, DbType type)
+		{
+			var dbtype = GetColumnType(type);
+			return $"CAST(({expression}) AS {dbtype})";
+		}
 		#endregion
 
 		#region Parameter handling
@@ -412,12 +423,16 @@ namespace Rebus.AdoNet.Dialects
 			foreach (var column in table.Columns.ToArray())
 			{
 				var primaryKey = (!table.HasCompositePrimaryKey && (bool)table.PrimaryKey?.Any(x => x == column.Name));
+				var @default = column.Default == null ? "" : column.Default is string
+					? Quote(column.Default as string)
+					: column.Default.ToString();
 
-				sb.AppendFormat(" {0} {1} {2} {3}",
+				sb.AppendFormat(" {0} {1} {2} {3} {4}",
 					QuoteForColumnName(column.Name),
 					GetColumnType(column.DbType, column.Length, column.Precision, column.Scale, column.Identity, column.Array, primaryKey),
 					column.Nullable ? "" : "NOT NULL",
-					(table.Columns.Last() == column) ? "" : ","
+					(table.Columns.Last() == column) ? "" : ",",
+					column.Default == null ? "" : $"DEFAULT {@default}"
 				);
 			}
 
@@ -435,7 +450,7 @@ namespace Rebus.AdoNet.Dialects
 			{
 				foreach (var index in table.Indexes)
 				{
-					sb.Append(FormatCreateIndex(table.Name, index));
+					sb.Append(FormatCreateIndex(table, index));
 				}
 			}
 
@@ -448,12 +463,30 @@ namespace Rebus.AdoNet.Dialects
 		/// <param name="table">The table.</param>
 		/// <param name="index">The index.</param>
 		/// <returns></returns>
-		public virtual string FormatCreateIndex(string table, AdoNetIndex index)
+		public virtual string FormatCreateIndex(AdoNetTable table, AdoNetIndex index)
 		{
-			return string.Format("CREATE INDEX {0} ON {1} ({2});",
+			var columns = index.Columns;
+
+			// For Json columns, try to apply index optimizations.
+			if (!string.IsNullOrWhiteSpace(JsonColumnGinPathIndexOpclass)
+				&& table.Columns.Any(x => x.DbType == DbType.Object))
+			{
+				columns = columns.Select(x =>
+					table.Columns.Single(c => c.Name == x).DbType == DbType.Object
+						? $"{QuoteForColumnName(x)} {JsonColumnGinPathIndexOpclass}"
+						: QuoteForColumnName(x)
+				).ToArray();
+			}
+			else
+			{
+				columns = columns.Select(x => QuoteForColumnName(x)).ToArray();
+			}
+
+			return string.Format("CREATE INDEX {0} ON {1} {2} ({3});",
 				!string.IsNullOrEmpty(index.Name) ? QuoteForTableName(index.Name) : "",
-				QuoteForTableName(table),
-				index.Columns.Select(x => QuoteForColumnName(x)).Aggregate((cur, next) => cur + ", " + next)
+				QuoteForTableName(table.Name),
+				index.Kind != AdoNetIndex.Kinds.Default ? $"USING {index.Kind.ToString().ToUpper()}" : "",
+				columns.Aggregate((cur, next) => cur + ", " + next)
 			);
 		}
 
@@ -472,6 +505,11 @@ namespace Rebus.AdoNet.Dialects
 		public virtual bool IsSelectForNoWaitLockingException(DbException ex)
 		{
 			throw new NotImplementedException("IsSelectForNoWaitLockingException not implemented for this dialect!");
+		}
+
+		public virtual bool IsDuplicateKeyException(DbException ex)
+		{
+			throw new NotImplementedException("IsDuplicateKeyException not implemented for this dialect!");
 		}
 		#endregion
 
@@ -509,6 +547,28 @@ namespace Rebus.AdoNet.Dialects
 		{
 			throw new NotSupportedException("ArrayAny function not supported by this dialect.");
 		}
+		#endregion
+
+		#region GIN Indexing
+		public virtual bool SupportsGinIndexes => false;
+
+		public virtual bool SupportsMultiColumnGinIndexes => false;
+
+		public virtual string TextColumnGinPathIndexOpclass => "";
+
+		#endregion
+
+		#region JSON Support
+
+		public virtual bool SupportsJsonColumns => false;
+
+		public virtual string JsonColumnGinPathIndexOpclass => "";
+		#endregion
+
+		#region IsOptimisticException
+
+		public abstract bool IsOptimisticLockingException(DbException ex);
+
 		#endregion
 
 		#region SqlDialects Registry

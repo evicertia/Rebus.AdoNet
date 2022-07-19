@@ -51,14 +51,16 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AdoNetConnectionFactory.cs" />
-    <Compile Include="AdoNetExceptionManager.cs" />
     <Compile Include="AdoNetExtensions.cs" />
     <Compile Include="AdoNetSagaPersister.cs" />
+    <Compile Include="AdoNetSagaPersisterAdvanced.cs" />
     <Compile Include="AdoNetSagaPersisterFluentConfigurer.cs" />
+    <Compile Include="AdoNetSagaPersisterLegacy.cs" />
     <Compile Include="AdoNetUnitOfWorkManager.cs" />
     <Compile Include="AdoNetUnitOfWorkScope.cs" />
     <Compile Include="Dialects\PostgreSql10Dialect.cs" />
     <Compile Include="Dialects\PostgreSql82Dialect.cs" />
+    <Compile Include="Dialects\PostgreSql92Dialect.cs" />
     <Compile Include="Dialects\PostgreSql94Dialect.cs" />
     <Compile Include="Dialects\PostgreSqlDialect.cs" />
     <Compile Include="Dialects\PostgreSql91Dialect.cs" />
@@ -67,6 +69,7 @@
     <Compile Include="Dialects\TypeNames.cs" />
     <Compile Include="AdoNetUnitOfWork.cs" />
     <Compile Include="Dialects\YugabyteDbDialect.cs" />
+    <Compile Include="Facilities\IDbConnectionExtensions.cs" />
     <Compile Include="netfx\System\Guard.cs" />
     <Compile Include="Schema\AdoNetColumn.cs" />
     <Compile Include="Schema\AdoNetIndex.cs" />

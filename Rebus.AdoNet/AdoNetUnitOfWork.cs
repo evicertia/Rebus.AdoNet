@@ -23,9 +23,21 @@ namespace Rebus.AdoNet
 		private Lazy<Tuple<IDbConnection, IDbTransaction>> __connection;
 		private bool _aborted;
 		private bool _autodispose;
+		//private Queue<AdoNetUnitOfWorkScope> _scopes = new Queue<AdoNetUnitOfWorkScope>();
 
-		private IDbConnection Connection => __connection?.Value.Item1;
-		private IDbTransaction Transaction => __connection?.Value.Item2;
+		private IDbConnection Connection {
+			get {
+				EnsureNotDisposed();
+				return __connection?.Value.Item1;
+			}
+		}
+
+		private IDbTransaction Transaction {
+			get {
+				EnsureNotDisposed();
+				return __connection?.Value.Item2;
+			}
+		}
 
 		/// <summary>
 		/// Occurs when [on dispose].
@@ -35,7 +47,6 @@ namespace Rebus.AdoNet
 		static AdoNetUnitOfWork()
 		{
 			RebusLoggerFactory.Changed += f => _log = f.GetCurrentClassLogger();
-
 		}
 
 		public AdoNetUnitOfWork(AdoNetConnectionFactory factory, IMessageContext context)
@@ -54,8 +65,18 @@ namespace Rebus.AdoNet
 			_log.Debug("Created new instance for context: {0}", context?.GetHashCode());
 		}
 
+		private void EnsureNotDisposed()
+		{
+			if (_disposed)
+			{
+				throw new ObjectDisposedException(nameof(AdoNetUnitOfWork));
+			}
+		}
+		
 		public AdoNetUnitOfWorkScope GetScope()
 		{
+			EnsureNotDisposed();
+			
 			var result = new AdoNetUnitOfWorkScope(this, _factory.Dialect, Connection);
 
 			if (_autodispose) {
@@ -72,6 +93,8 @@ namespace Rebus.AdoNet
 
 		public void Abort()
 		{
+			EnsureNotDisposed();
+			
 			if (Transaction == null) throw new InvalidOperationException("UnitOfWork has no active transaction?!");
 
 			_log.Debug("Rolling back transaction: {0}...", Transaction.GetHashCode());
@@ -82,6 +105,8 @@ namespace Rebus.AdoNet
 
 		public void Commit()
 		{
+			EnsureNotDisposed();
+			
 			if (Transaction == null) throw new InvalidOperationException("UnitOfWork has no active transaction?!");
 
 			_log.Debug("Committing transaction: {0}...", Transaction.GetHashCode());

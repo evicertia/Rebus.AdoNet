@@ -12,6 +12,11 @@ namespace Rebus.AdoNet.Dialects
 		public override ushort Priority => 91;
 		public override bool SupportsTryAdvisoryXactLockFunction => true;
 
+		public override bool SupportsGinIndexes => true;
+
+		public override bool SupportsMultiColumnGinIndexes => true;
+		public override string TextColumnGinPathIndexOpclass => "gist_trgm_ops";
+
 		public override string FormatTryAdvisoryXactLock(IEnumerable<object> args)
 		{
 			var @params = "";

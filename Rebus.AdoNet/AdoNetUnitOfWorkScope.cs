@@ -46,8 +46,17 @@ namespace Rebus.AdoNet
 			_log.Debug("Created new instance: {0} (UnitOfWork: {1})", GetHashCode(), unitOfWork.GetHashCode());
 		}
 
+		private void EnsureNotDisposed()
+		{
+			if (_disposed)
+			{
+				throw new ObjectDisposedException(nameof(AdoNetUnitOfWorkScope));
+			}
+		}
+
 		public void Complete()
 		{
+			EnsureNotDisposed();
 			_completed = true;
 		}
 
@@ -56,6 +65,7 @@ namespace Rebus.AdoNet
 		/// </summary>
 		public IEnumerable<string> GetTableNames()
 		{
+			EnsureNotDisposed();
 			return Dialect.GetTableNames(Connection);
 		}
 
@@ -97,7 +107,7 @@ namespace Rebus.AdoNet
 		}
 #endif
 
-		// This code added to correctly implement the disposable pattern.
+		// Code added to correctly implement the disposable pattern.
 		public void Dispose()
 		{
 			// Do not change this code. Put cleanup code in Dispose(bool disposing) above.

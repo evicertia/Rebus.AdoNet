@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Rebus.AdoNet.Schema;
 
 namespace Rebus.AdoNet.Dialects
 {
@@ -13,6 +11,8 @@ namespace Rebus.AdoNet.Dialects
 	/// </summary>
 	public class PostgreSqlDialect : SqlDialect
 	{
+		private static readonly IEnumerable<string> _postgresExceptionNames = new[] { "NpgsqlException", "PostgresException" };
+
 		protected virtual Version MinimumDatabaseVersion => new Version("8.0");
 
 		public PostgreSqlDialect()
@@ -74,6 +74,40 @@ namespace Rebus.AdoNet.Dialects
 				return false;
 			}
 		}
+
+		public override bool IsSelectForNoWaitLockingException(DbException ex)
+		{
+			if (ex != null && _postgresExceptionNames.Contains(ex.GetType().Name))
+			{
+				var psqlex = new PostgreSqlExceptionAdapter(ex);
+				return psqlex.Code == "55P03";
+			}
+
+			return false;
+		}
+
+		public override bool IsDuplicateKeyException(DbException ex)
+		{
+			if (ex != null && _postgresExceptionNames.Contains(ex.GetType().Name))
+			{
+				var psqlex = new PostgreSqlExceptionAdapter(ex);
+				return psqlex.Code == "23505";
+			}
+
+			return false;
+		}
+
+		public override bool IsOptimisticLockingException(DbException ex)
+		{
+			if (ex != null && _postgresExceptionNames.Contains(ex.GetType().Name))
+			{
+				var psqlex = new PostgreSqlExceptionAdapter(ex);
+				return psqlex.Code == "40001";
+			}
+
+			return false;
+		}
+
 		#endregion
 
 		#region GetColumnType
@@ -122,3 +156,4 @@ namespace Rebus.AdoNet.Dialects
 		#endregion
 	}
 }
+

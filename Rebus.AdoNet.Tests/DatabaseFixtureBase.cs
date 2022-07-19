@@ -108,6 +108,35 @@ namespace Rebus.AdoNet
 			}
 		}
 
+		/// <summary>
+		/// Fetch the column names with their data types..
+		///		where the Tuple.Item1 is the column name and the Tuple.Item2 is the data type.
+		/// </summary>
+		protected IEnumerable<Tuple<string, string>> GetColumnSchemaFor(string tableName)
+		{
+			using (var connection = Factory.CreateConnection())
+			{
+				connection.ConnectionString = ConnectionString;
+				connection.Open();
+
+				return connection.GetColumnSchemaFor(tableName);
+			}
+		}
+
+		/// <summary>
+		/// Retrieve table's indexes for a specific table.
+		/// </summary>
+		protected IEnumerable<string> GetIndexesFor(string tableName)
+		{
+			using (var connection = Factory.CreateConnection())
+			{
+				connection.ConnectionString = ConnectionString;
+				connection.Open();
+
+				return connection.GetIndexesFor(tableName);
+			}
+		}
+
 		protected void DropTable(string tableName)
 		{
 			if (!GetTableNames().Contains(tableName, StringComparer.InvariantCultureIgnoreCase)) return;
