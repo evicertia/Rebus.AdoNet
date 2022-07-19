@@ -66,5 +66,20 @@ namespace Rebus.AdoNet.Dialects
 				"INTEGER PRIMARY KEY AUTOINCREMENT" //< This is all you can get from sqlite's identity/auto-increment support.
 				: base.GetColumnType(type, length, precision, scale, identity, array, primary);
 		}
+
+		public override bool IsDuplicateKeyException(DbException ex)
+		{
+			// See: https://www.sqlite.org/rescode.html
+			return ex.ErrorCode == 19 //< CONSTRAINT
+				|| ex.ErrorCode == 2067; //< UNIQUE
+		}
+
+		public override bool IsOptimisticLockingException(DbException ex)
+		{
+			// See: https://www.sqlite.org/rescode.html
+			return ex.ErrorCode == 5 //< BUSY
+				|| ex.ErrorCode == 6; //< LOCKED
+		}
 	}
 }
+

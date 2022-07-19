@@ -119,22 +119,7 @@ namespace Rebus.AdoNet
 				connection.ConnectionString = ConnectionString;
 				connection.Open();
 
-				// XXX: In order, to retrieve the schema information we can specify
-				//		the catalog (0), schema (1), table name (2) and column name (3).
-				var restrictions = new string[4];
-				restrictions[2] = tableName;
-
-				var data = new List<Tuple<string, string>>();
-				var schemas = connection.GetSchema("Columns", restrictions);
-
-				foreach (DataRow row in schemas.Rows)
-				{
-					var name = row["COLUMN_NAME"] as string;
-					var type = row["DATA_TYPE"] as string;
-					data.Add(Tuple.Create(name, type));
-				}
-
-				return data.ToArray();
+				return connection.GetColumnSchemaFor(tableName);
 			}
 		}
 
@@ -148,18 +133,7 @@ namespace Rebus.AdoNet
 				connection.ConnectionString = ConnectionString;
 				connection.Open();
 
-				// XXX: In order, to retrieve the schema information we can specify
-				//		the catalog (0), schema (1), table name (2) and column name (3).
-				var restrictions = new string[4];
-				restrictions[2] = tableName;
-
-				var data = new List<string>();
-				var schemas = connection.GetSchema("Indexes", restrictions);
-
-				foreach (DataRow row in schemas.Rows)
-					data.Add(row["INDEX_NAME"] as string);
-
-				return data.ToArray();
+				return connection.GetIndexesFor(tableName);
 			}
 		}
 

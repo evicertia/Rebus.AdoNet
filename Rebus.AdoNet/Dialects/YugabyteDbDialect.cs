@@ -61,5 +61,16 @@ namespace Rebus.AdoNet.Dialects
 
 			return false;
 		}
+
+		public override bool IsOptimisticLockingException(DbException ex)
+		{
+			if (ex != null && _postgresExceptionNames.Contains(ex.GetType().Name))
+			{
+				var psqlex = new PostgreSqlExceptionAdapter(ex);
+				return psqlex.Code == "40001";
+			}
+
+			return false;
+		}
 	}
 }

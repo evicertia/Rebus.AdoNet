@@ -1,8 +1,8 @@
 # These files are text and should be normalized (convert crlf =&gt; lf)
-*.cs      text diff=csharp
+#*.cs      text diff=csharp
 *.xaml    text
 *.csproj  text
-*.sln     text
+#*.sln     text
 *.tt      text
 *.ps1     text
 *.cmd     text
@@ -11,7 +11,7 @@
 *.cshtml  text
 *.html    text
 *.js      text
-*.config  text
+#*.config  text
 
 # Images should be treated as binary
 # (binary is a macro for -text -diff)

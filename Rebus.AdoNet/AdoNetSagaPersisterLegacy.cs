@@ -194,7 +194,9 @@ namespace Rebus.AdoNet
 					{
 						command.ExecuteNonQuery();
 					}
-					catch (DbException exception)
+					catch (DbException exception) when (
+						dialect.IsOptimisticLockingException(exception)
+						|| dialect.IsDuplicateKeyException(exception))
 					{
 						throw new OptimisticLockingException(sagaData, exception);
 					}
@@ -236,10 +238,20 @@ namespace Rebus.AdoNet
 						dialect.QuoteForColumnName(SAGA_ID_COLUMN), dialect.EscapeParameter(SAGA_ID_COLUMN),
 						dialect.QuoteForColumnName(SAGA_REVISION_COLUMN), dialect.EscapeParameter("current_revision")
 					);
-					var rows = command.ExecuteNonQuery();
-					if (rows == 0)
+
+					try
 					{
-						throw new OptimisticLockingException(sagaData);
+						var rows = command.ExecuteNonQuery();
+						if (rows == 0)
+						{
+							throw new OptimisticLockingException(sagaData);
+						}
+					}
+					catch (DbException exception) when (
+						dialect.IsOptimisticLockingException(exception)
+						|| dialect.IsDuplicateKeyException(exception))
+					{
+						throw new OptimisticLockingException(sagaData, exception);
 					}
 				}
 
@@ -318,7 +330,9 @@ namespace Rebus.AdoNet
 				{
 					command.ExecuteNonQuery();
 				}
-				catch (DbException exception)
+				catch (DbException exception) when (
+					dialect.IsOptimisticLockingException(exception)
+					|| dialect.IsDuplicateKeyException(exception))
 				{
 					throw new OptimisticLockingException(sagaData, exception);
 				}
@@ -387,7 +401,9 @@ namespace Rebus.AdoNet
 						existingKeys = reader.AsEnumerable<string>(SAGAINDEX_KEY_COLUMN).ToArray();
 					}
 				}
-				catch (DbException exception)
+				catch (DbException exception) when (
+					dialect.IsOptimisticLockingException(exception)
+					|| dialect.IsDuplicateKeyException(exception))
 				{
 					throw new OptimisticLockingException(sagaData, exception);
 				}
@@ -417,7 +433,9 @@ namespace Rebus.AdoNet
 				{
 					command.ExecuteNonQuery();
 				}
-				catch (DbException exception)
+				catch (DbException exception) when (
+					dialect.IsOptimisticLockingException(exception)
+					|| dialect.IsDuplicateKeyException(exception))
 				{
 					throw new OptimisticLockingException(sagaData, exception);
 				}
@@ -460,7 +478,9 @@ namespace Rebus.AdoNet
 						existingKeys = reader.AsEnumerable<string>(SAGAINDEX_KEY_COLUMN).ToArray();
 					}
 				}
-				catch (DbException exception)
+				catch (DbException exception) when (
+					dialect.IsOptimisticLockingException(exception)
+					|| dialect.IsDuplicateKeyException(exception))
 				{
 					throw new OptimisticLockingException(sagaData, exception);
 				}
@@ -500,7 +520,9 @@ namespace Rebus.AdoNet
 					{
 						command.ExecuteNonQuery();
 					}
-					catch (DbException exception)
+					catch (DbException exception) when (
+						dialect.IsOptimisticLockingException(exception)
+						|| dialect.IsDuplicateKeyException(exception))
 					{
 						throw new OptimisticLockingException(sagaData, exception);
 					}
@@ -534,7 +556,9 @@ namespace Rebus.AdoNet
 					{
 						command.ExecuteNonQuery();
 					}
-					catch (DbException exception)
+					catch (DbException exception) when (
+						dialect.IsOptimisticLockingException(exception)
+						|| dialect.IsDuplicateKeyException(exception))
 					{
 						throw new OptimisticLockingException(sagaData, exception);
 					}
@@ -595,11 +619,12 @@ namespace Rebus.AdoNet
 					{
 						command.ExecuteNonQuery();
 					}
-					catch (DbException exception)
+					catch (DbException exception) when (
+						dialect.IsOptimisticLockingException(exception)
+						|| dialect.IsDuplicateKeyException(exception))
 					{
 						throw new OptimisticLockingException(sagaData, exception);
 					}
-
 				}
 			}
 		}

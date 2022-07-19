@@ -209,20 +209,11 @@ saga type name.",
 			return JsonConvert.SerializeObject(sagaData, Formatting.Indented, Settings);
 		}
 
-		public virtual void Insert(ISagaData sagaData, string[] sagaDataPropertyPathsToIndex)
-		{
-			throw new NotImplementedException("Insert method implementation missing?1");
-		}
+		public abstract void Insert(ISagaData sagaData, string[] sagaDataPropertyPathsToIndex);
 
-		public virtual void Update(ISagaData sagaData, string[] sagaDataPropertyPathsToIndex)
-		{
-			throw new NotImplementedException("Update method implementation missing?1");
-		}
+		public abstract void Update(ISagaData sagaData, string[] sagaDataPropertyPathsToIndex);
 
-		public virtual void Delete(ISagaData sagaData)
-		{
-			throw new NotImplementedException("Delete method implementation missing?1");
-		}
+		public abstract void Delete(ISagaData sagaData);
 
 		protected abstract string Fetch<TSagaData>(string sagaDataPropertyPath, object fieldFromMessage)
 			where TSagaData : class, ISagaData;

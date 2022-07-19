@@ -139,11 +139,6 @@ namespace Rebus.AdoNet.Dialects
 			return _typeNames.GetLongest(dbType);
 		}
 
-		/// <summary>
-		/// Reverse search for *testing purpose* in order to get (for each dialect) the related DBType..
-		/// </summary>
-		internal virtual DbType GetDbTypeFor(string name) => _typeNames.Defaults.First(x => x.Value.ToLowerInvariant() == name.ToLowerInvariant()).Key;
-
 		#endregion
 
 		#region Identifier quoting support
@@ -429,8 +424,8 @@ namespace Rebus.AdoNet.Dialects
 			{
 				var primaryKey = (!table.HasCompositePrimaryKey && (bool)table.PrimaryKey?.Any(x => x == column.Name));
 				var @default = column.Default == null ? "" : column.Default is string
-						? Quote(column.Default as string)
-						: column.Default.ToString();
+					? Quote(column.Default as string)
+					: column.Default.ToString();
 
 				sb.AppendFormat(" {0} {1} {2} {3} {4}",
 					QuoteForColumnName(column.Name),
@@ -568,6 +563,12 @@ namespace Rebus.AdoNet.Dialects
 		public virtual bool SupportsJsonColumns => false;
 
 		public virtual string JsonColumnGinPathIndexOpclass => "";
+		#endregion
+
+		#region IsOptimisticException
+
+		public abstract bool IsOptimisticLockingException(DbException ex);
+
 		#endregion
 
 		#region SqlDialects Registry

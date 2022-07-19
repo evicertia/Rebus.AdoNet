@@ -194,7 +194,9 @@ namespace Rebus.AdoNet
 				{
 					command.ExecuteNonQuery();
 				}
-				catch (DbException exception)
+				catch (DbException exception) when (
+					dialect.IsOptimisticLockingException(exception)
+					|| dialect.IsDuplicateKeyException(exception))
 				{
 					throw new OptimisticLockingException(sagaData, exception);
 				}
@@ -229,10 +231,20 @@ namespace Rebus.AdoNet
 					dialect.QuoteForColumnName(SAGA_ID_COLUMN), dialect.EscapeParameter(SAGA_ID_COLUMN),
 					dialect.QuoteForColumnName(SAGA_REVISION_COLUMN), dialect.EscapeParameter("current_revision")
 				);
-				var rows = command.ExecuteNonQuery();
-				if (rows == 0)
+
+				try
 				{
-					throw new OptimisticLockingException(sagaData);
+					var rows = command.ExecuteNonQuery();
+					if (rows == 0)
+					{
+						throw new OptimisticLockingException(sagaData);
+					}
+				}
+				catch (DbException exception) when (
+					dialect.IsOptimisticLockingException(exception)
+					|| dialect.IsDuplicateKeyException(exception))
+				{
+					throw new OptimisticLockingException(sagaData, exception);
 				}
 
 				scope.Complete();
@@ -298,6 +310,33 @@ namespace Rebus.AdoNet
 				   .ToDictionary(x => x.Key, x => x.Value);
 		}
 
+		private static void Validate(object correlation)
+		{
+			var type = correlation?.GetType();
+			if (type == null)
+				return;
+
+			if (type.IsArray)
+			{
+				if (type.GetArrayRank() > 1)
+					throw new ArgumentOutOfRangeException("Multidimensional arrays are not supported.");
+
+				type = type.GetElementType();
+			}
+
+			type = Nullable.GetUnderlyingType(type) ?? type;
+			if (type.IsPrimitive || type.IsEnum)
+				return;
+
+			if (type == typeof(string) || type == typeof(Guid) || type == typeof(DateTime)
+				|| type == typeof(decimal) || type == typeof(TimeSpan))
+			{
+				return;
+			}
+
+			throw new NotSupportedException($"Type {type.Name} is not supported as a correlation value.");
+		}
+
 		protected override string Fetch<TSagaData>(string sagaDataPropertyPath, object fieldFromMessage)
 		{
 			using (var scope = manager.GetScope(autocomplete: true))
@@ -340,6 +379,8 @@ namespace Rebus.AdoNet
 				}
 				else
 				{
+					Validate(correlation: fieldFromMessage);
+
 					var dataCol = dialect.QuoteForColumnName(SAGA_DATA_COLUMN);
 					var sagaTblName = dialect.QuoteForTableName(sagasTableName);
 					var sagaTypeCol = dialect.QuoteForColumnName(SAGA_TYPE_COLUMN);
@@ -359,10 +400,6 @@ namespace Rebus.AdoNet
 							    s.{sagaCorrelationsCol} @> {dialect.Cast(sagaCorrelationsValuesParam, DbType.Object)}
 							  )
 						{forUpdate};".Replace("\t", "");
-
-					var type = fieldFromMessage?.GetType();
-					if (type != null && type.IsGenericType && type.GetGenericTypeDefinition() == typeof(KeyValuePair<,>))
-						throw new NotSupportedException("Using a KeyValuePair<,> as correlation is not supported.");
 
 					var value = SerializeCorrelations(new Dictionary<string, object>() { { sagaDataPropertyPath, fieldFromMessage } });
 					var values = SerializeCorrelations(new Dictionary<string, object>() { { sagaDataPropertyPath, new[] { fieldFromMessage } } });
