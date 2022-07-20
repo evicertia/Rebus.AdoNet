@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Rebus.Serialization.Json;
 using Newtonsoft.Json.Serialization;

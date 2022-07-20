@@ -1,5 +1,4 @@
-#if true
-using System;
+﻿using System;
 using System.Data;
 using System.Linq;
 using System.Data.Common;
@@ -433,4 +432,3 @@ namespace Rebus.AdoNet
 		#endregion
 	}
 }
-#endif
