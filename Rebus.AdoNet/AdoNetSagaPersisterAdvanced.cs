@@ -72,7 +72,7 @@ namespace Rebus.AdoNet
 		public override AdoNetSagaPersisterFluentConfigurer EnsureTablesAreCreated()
 		{
 			using (var uow = manager.Create(autonomous: true))
-			using (var scope = (uow as AdoNetUnitOfWork).GetScope())
+			using (var scope = (uow as IAdoNetUnitOfWork).GetScope())
 			{
 				var dialect = scope.Dialect;
 				var connection = scope.Connection;
