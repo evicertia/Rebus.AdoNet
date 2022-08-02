@@ -73,7 +73,7 @@ namespace Rebus.AdoNet
 			}
 		}
 		
-		public AdoNetUnitOfWorkScope GetScope()
+		public virtual AdoNetUnitOfWorkScope GetScope()
 		{
 			EnsureNotDisposed();
 			
@@ -91,7 +91,7 @@ namespace Rebus.AdoNet
 			return result;
 		}
 
-		public void Abort()
+		public virtual void Abort()
 		{
 			EnsureNotDisposed();
 			
@@ -103,7 +103,7 @@ namespace Rebus.AdoNet
 			_log.Debug("Rolled back transaction: {0}...", Transaction.GetHashCode());
 		}
 
-		public void Commit()
+		public virtual void Commit()
 		{
 			EnsureNotDisposed();
 			
