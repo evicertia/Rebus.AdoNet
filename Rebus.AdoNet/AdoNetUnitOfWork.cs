@@ -16,7 +16,7 @@ namespace Rebus.AdoNet
 		AdoNetUnitOfWorkScope GetScope();
 	}
 
-	internal class AdoNetUnitOfWork : IAdoNetUnitOfWork
+	public class AdoNetUnitOfWork : IAdoNetUnitOfWork
 	{
 		private static ILog _log;
 		private readonly AdoNetConnectionFactory _factory;
