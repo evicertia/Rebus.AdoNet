@@ -731,6 +731,35 @@ namespace Rebus.AdoNet
 			Assert.That(_persister.Find<SagaDataWithNestedElement>(pathTwo, "3"), Is.Null);
 		}
 
+		[Test]
+		public void PersisterDiscardCorrelationsThatShouldNotBeIndexed()
+		{
+			var data = new ComplexSaga() {
+				Id = Guid.NewGuid(),
+				Uuid = Guid.Empty,
+				NullableGuid = Guid.Empty,
+				Date = default(DateTime),
+				Text = null
+			};
+
+			var correlations = new Dictionary<string, object>() {
+				[nameof(ComplexSaga.Uuid)] = Guid.Empty,
+				[nameof(ComplexSaga.NullableGuid)] = Guid.Empty,
+				[nameof(ComplexSaga.Date)] = default(DateTime),
+				[nameof(ComplexSaga.Text)] = (string)null
+			};
+
+			_persister.DoNotIndexNullProperties();
+			_persister.Insert(data, correlations.Keys.ToArray());
+
+			Assert.Multiple(() => {
+				foreach (var correlation in correlations) {
+					var recovered = _persister.Find<ComplexSaga>(correlation.Key, correlation.Value);
+					Assert.That(recovered, Is.Null, "Saga should not be recovered w/ correlation {0} as should be discarded bc null/def.", correlation.Key);
+				}
+			});
+		}
+
 		#endregion
 
 		#region Uniqueness Of CorrelationIds

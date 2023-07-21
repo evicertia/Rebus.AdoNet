@@ -204,6 +204,23 @@ saga type name.",
 		
 		#endregion
 
+		protected virtual bool ShouldIndexValue(KeyValuePair<string, object> pair)
+		{
+			if (IndexNullProperties)
+				return true;
+
+			if (string.IsNullOrWhiteSpace(pair.Key)) //< XXX: Could we reach this condition?
+				return false;
+
+			if (pair.Value == null) return false;
+			if (pair.Value is string) return true;
+			if (pair.Value is Guid uuid && uuid == default(Guid)) return false; //< Avoid empty guids..
+			if (pair.Value is DateTime date && date == default(DateTime)) return false; //< Avoid def datetimes..
+			if (pair.Value is IEnumerable e && !e.Cast<object>().Any()) return false;
+
+			return true;
+		}
+
 		protected string Serialize(ISagaData sagaData)
 		{
 			return JsonConvert.SerializeObject(sagaData, Formatting.Indented, Settings);

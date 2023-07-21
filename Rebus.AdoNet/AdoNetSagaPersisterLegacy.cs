@@ -705,22 +705,10 @@ namespace Rebus.AdoNet
 			return UseSqlArrays && dialect.SupportsArrayTypes;
 		}
 
-		private bool ShouldIndexValue(object value)
-		{
-			if (IndexNullProperties)
-				return true;
-
-			if (value == null) return false;
-			if (value is string) return true;
-			if ((value is IEnumerable) && !(value as IEnumerable).Cast<object>().Any()) return false;
-
-			return true;
-		}
-
 		private IDictionary<string, object> GetPropertiesToIndex(ISagaData sagaData, IEnumerable<string> sagaDataPropertyPathsToIndex)
 		{
 			return sagaDataPropertyPathsToIndex
-				.Select(x => new { Key = x, Value = Reflect.Value(sagaData, x) })
+				.ToDictionary(x => x, x => Reflect.Value(sagaData, x))
 				.Where(ShouldIndexValue)
 				.ToDictionary(x => x.Key, x => x.Value);
 		}
