@@ -23,8 +23,8 @@ namespace Rebus.AdoNet.Dialects
 		public override string Message => _exception.Message;
 		public override string StackTrace => _exception.StackTrace;
 
-		public string Code => GetPropertyValue<string>("Code", _exception);
-		public string ErrorSql => GetPropertyValue<string>("ErrorSql", _exception);
+		public string Code => TryGetPropertyValue<string>("Code", _exception);
+		public string ErrorSql => TryGetPropertyValue<string>("ErrorSql", _exception);
 
 		public override string HelpLink
 		{
@@ -57,10 +57,10 @@ namespace Rebus.AdoNet.Dialects
 			_exception = exception.ThrowIfNull(nameof(exception));
 		}
 
-		public static T GetPropertyValue<T>(string propertyName, object instance)
+		public static T TryGetPropertyValue<T>(string propertyName, object instance)
 		{
 			var bflags = BindingFlags.GetProperty | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-			return (T)instance.GetType().GetProperty(propertyName, bflags).GetValue(instance, null);
+			return (T)instance.GetType().GetProperty(propertyName, bflags)?.GetValue(instance, null);
 		}
 
 		#region DbException overriden methods..
